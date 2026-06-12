@@ -350,6 +350,14 @@ export default function App() {
   const isLiveStatus = (s) => s === 'IN_PLAY' || s === 'PAUSED';
   const todayStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD local
 
+  // Podium colors for the top three (gold / silver / bronze), null otherwise.
+  const medal = (index) => {
+    if (index === 0) return { solid: '#fbbf24', tint: 'rgba(251,191,36,0.15)', border: 'rgba(251,191,36,0.4)', glow: 'rgba(251,191,36,0.08)', text: '#040d18', emoji: '🥇' };
+    if (index === 1) return { solid: '#cbd5e1', tint: 'rgba(203,213,225,0.12)', border: 'rgba(203,213,225,0.4)', glow: 'rgba(203,213,225,0.06)', text: '#040d18', emoji: '🥈' };
+    if (index === 2) return { solid: '#d8924a', tint: 'rgba(216,146,74,0.14)', border: 'rgba(216,146,74,0.4)', glow: 'rgba(216,146,74,0.06)', text: '#040d18', emoji: '🥉' };
+    return null;
+  };
+
   const scrollToId = (id) => {
     setJumpOpen(false);
     const el = document.getElementById(id);
@@ -434,23 +442,33 @@ export default function App() {
   const calculatePoints = () => {
     return PLAYERS.map(player => {
       let points = 0;
-      let remaining = 0;
+      let remaining = 0;     // matches still to be played that involve their teams
       MATCHES.forEach(match => {
-        const isPlayers = player.teams.includes(match.team1) || player.teams.includes(match.team2);
+        const ownsTeam1 = player.teams.includes(match.team1);
+        const ownsTeam2 = player.teams.includes(match.team2);
+        if (!ownsTeam1 && !ownsTeam2) return;
+
         const result = results[match.id];
-        if (result === 'draw' && isPlayers) {
-          points += 0.5;
-        } else if (result && result !== 'draw' && player.teams.includes(result)) {
-          points += 1;
-        }
-        // A match counts as "remaining" for this player if one of their teams
-        // is in it and it hasn't completed yet (no result, not FINISHED).
-        if (isPlayers && !result && meta[match.id]?.status !== 'FINISHED') {
+        const done = !!result || meta[match.id]?.status === 'FINISHED';
+
+        if (done && result) {
+          // Award actual points: 1 if their team won; 0.5 per owned team in a draw.
+          if (result === 'draw') {
+            points += (ownsTeam1 ? 0.5 : 0) + (ownsTeam2 ? 0.5 : 0);
+          } else if (player.teams.includes(result)) {
+            points += 1;
+          }
+        } else {
+          // Not finished — still winnable. Even when a player owns BOTH teams in
+          // a match, only 1 point is possible from it (a win = 1; a draw =
+          // 0.5 + 0.5 = 1), so each remaining match adds exactly 1 to the ceiling.
           remaining += 1;
         }
       });
+      // Maximum they could still finish on: current points + 1 per game left.
+      const maxPoints = points + remaining;
       const oddsSum = player.teams.reduce((sum, team) => sum + (ODDS[team] ?? 999999), 0);
-      return { ...player, points, oddsSum, remaining };
+      return { ...player, points, oddsSum, remaining, maxPoints };
     }).sort((a, b) => {
       if (b.points !== a.points) return b.points - a.points;       // most points
       if (b.remaining !== a.remaining) return b.remaining - a.remaining; // more games left
@@ -536,7 +554,7 @@ export default function App() {
               <div className="max-h-56 overflow-y-auto">
                 {leaderboard.map((p, i) => (
                   <button key={p.id} onClick={() => scrollToId(`player-${p.id}`)} className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-white/5 flex items-center justify-between">
-                    <span>{i === 0 ? '🏆 ' : `${i + 1}. `}{p.name}</span>
+                    <span>{medal(i) ? `${medal(i).emoji} ` : `${i + 1}. `}{p.name}</span>
                     <span className="text-xs font-bold" style={{ color: '#C8102E' }}>{Number.isInteger(p.points) ? p.points : p.points.toFixed(1)}</span>
                   </button>
                 ))}
@@ -727,25 +745,39 @@ export default function App() {
         </div>
       )}
 
-      {/* ===== "Matches today" notification banner ===== */}
-      {matchesToday && (
-        <button
-          onClick={() => scrollToId('ticker')}
-          className="w-full text-left"
-          style={{ background: anyLiveNow ? 'rgba(74,222,128,0.1)' : 'rgba(200,16,46,0.12)', borderBottom: `1px solid ${anyLiveNow ? 'rgba(74,222,128,0.3)' : 'rgba(200,16,46,0.3)'}` }}
-        >
-          <div className="max-w-7xl mx-auto px-4 py-2.5 flex items-center gap-2 text-sm font-bold" style={{ color: anyLiveNow ? '#4ade80' : '#ff8095' }}>
-            <span className="relative flex h-2.5 w-2.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ background: anyLiveNow ? '#4ade80' : '#C8102E' }}></span>
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5" style={{ background: anyLiveNow ? '#4ade80' : '#C8102E' }}></span>
-            </span>
-            {anyLiveNow
-              ? `${liveMatches.length} match${liveMatches.length > 1 ? 'es' : ''} live right now`
-              : `${todayCount} match${todayCount > 1 ? 'es' : ''} today`}
-            <span className="text-xs font-normal opacity-70 ml-1">— tap to view</span>
+      {/* ===== Quick-look leaderboard (1–10, name + points) ===== */}
+      <div style={{ background: 'rgba(4, 13, 24, 0.6)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+        <div className="max-w-7xl mx-auto px-4 py-3">
+          <div className="text-[10px] uppercase tracking-wide font-black text-gray-500 mb-2">Standings</div>
+          <div className="flex flex-wrap gap-2">
+            {leaderboard.map((p, i) => {
+              const m = medal(i);
+              return (
+              <button
+                key={p.id}
+                onClick={() => scrollToId(`player-${p.id}`)}
+                className="flex items-center gap-2 pl-1.5 pr-3 py-1 rounded-full transition-all hover:brightness-125"
+                style={{
+                  background: m ? m.tint : 'rgba(255,255,255,0.05)',
+                  border: m ? `1px solid ${m.border}` : '1px solid rgba(255,255,255,0.08)'
+                }}
+              >
+                <span className="flex items-center justify-center h-5 w-5 rounded-full text-[10px] font-black shrink-0" style={{
+                  background: m ? m.solid : 'rgba(255,255,255,0.1)',
+                  color: m ? m.text : '#9ca3af'
+                }}>
+                  {i + 1}
+                </span>
+                <span className="text-xs font-bold text-white whitespace-nowrap">{p.name}</span>
+                <span className="text-xs font-black whitespace-nowrap" style={{ color: '#C8102E' }}>
+                  {Number.isInteger(p.points) ? p.points : p.points.toFixed(1)}
+                </span>
+              </button>
+              );
+            })}
           </div>
-        </button>
-      )}
+        </div>
+      </div>
 
       <div className="max-w-7xl mx-auto px-4 py-10">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
@@ -773,16 +805,20 @@ export default function App() {
                     className="rounded-xl p-4 transition-all"
                     style={{
                       scrollMarginTop: '90px',
-                      background: index === 0 ? 'linear-gradient(135deg, rgba(200,16,46,0.2) 0%, rgba(4,13,24,0.85) 100%)' : 'rgba(4, 13, 24, 0.7)',
-                      border: index === 0 ? '1px solid rgba(251,191,36,0.4)' : '1px solid rgba(255,255,255,0.05)',
-                      boxShadow: index === 0 ? '0 0 24px rgba(251,191,36,0.08)' : 'none'
+                      background: index === 0
+                        ? 'linear-gradient(135deg, rgba(200,16,46,0.2) 0%, rgba(4,13,24,0.85) 100%)'
+                        : medal(index)
+                          ? `linear-gradient(135deg, ${medal(index).tint} 0%, rgba(4,13,24,0.8) 100%)`
+                          : 'rgba(4, 13, 24, 0.7)',
+                      border: medal(index) ? `1px solid ${medal(index).border}` : '1px solid rgba(255,255,255,0.05)',
+                      boxShadow: medal(index) ? `0 0 24px ${medal(index).glow}` : 'none'
                     }}
                   >
                     {/* Player Header */}
                     <div className="flex items-center justify-between mb-3">
                       <div className="min-w-0">
                         <div className="text-white font-bold text-sm truncate">
-                          {index === 0 ? '🏆 ' : `${index + 1}. `}{player.name}
+                          {medal(index) ? `${medal(index).emoji} ` : `${index + 1}. `}{player.name}
                         </div>
                         {(() => {
                           // Owner's soonest upcoming match across all their teams.
@@ -811,6 +847,20 @@ export default function App() {
                       </div>
                       <div className="font-bold text-lg shrink-0 ml-2" style={{ color: '#C8102E' }}>
                         {Number.isInteger(player.points) ? player.points : player.points.toFixed(1)} <span className="text-xs text-gray-500 font-normal">pts</span>
+                      </div>
+                    </div>
+
+                    {/* Remaining + max-possible stats */}
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="flex-1 text-center rounded-md py-1.5" style={{ background: 'rgba(255,255,255,0.04)' }}>
+                        <div className="text-sm font-black text-white">{player.remaining}</div>
+                        <div className="text-[9px] uppercase tracking-wide text-gray-500 font-bold">Games left</div>
+                      </div>
+                      <div className="flex-1 text-center rounded-md py-1.5" style={{ background: 'rgba(74,222,128,0.08)' }}>
+                        <div className="text-sm font-black" style={{ color: '#4ade80' }}>
+                          {Number.isInteger(player.maxPoints) ? player.maxPoints : player.maxPoints.toFixed(1)}
+                        </div>
+                        <div className="text-[9px] uppercase tracking-wide text-gray-500 font-bold">Max possible</div>
                       </div>
                     </div>
 
