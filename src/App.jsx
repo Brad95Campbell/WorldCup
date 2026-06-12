@@ -522,6 +522,42 @@ export default function App() {
   return (
     <div className="min-h-screen" style={{ background: 'linear-gradient(160deg, #040d18 0%, #081a32 50%, #0a0d18 100%)', backgroundAttachment: 'fixed' }}>
 
+      {/* ===== Floating "Jump to" menu (always available) ===== */}
+      <div className="fixed z-50" style={{ right: '20px', bottom: '20px' }}>
+        {jumpOpen && (
+          <>
+            <div className="fixed inset-0" style={{ zIndex: -1 }} onClick={() => setJumpOpen(false)}></div>
+            <div className="absolute right-0 bottom-16 w-60 rounded-xl overflow-hidden shadow-2xl" style={{ background: '#071e38', border: '1px solid rgba(255,255,255,0.12)' }}>
+              <div className="px-3 py-2 text-[10px] uppercase tracking-wide font-black text-gray-500" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>Sections</div>
+              <button onClick={() => scrollToId('standings')} className="w-full text-left px-3 py-2.5 text-sm text-gray-200 hover:bg-white/5">🏆 Standings</button>
+              <button onClick={() => { setView('matches'); setTimeout(() => scrollToId('matches'), 0); }} className="w-full text-left px-3 py-2.5 text-sm text-gray-200 hover:bg-white/5">⚽ Matches</button>
+              <div className="px-3 py-2 text-[10px] uppercase tracking-wide font-black text-gray-500" style={{ borderTop: '1px solid rgba(255,255,255,0.06)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>Jump to owner</div>
+              <div className="max-h-56 overflow-y-auto">
+                {leaderboard.map((p, i) => (
+                  <button key={p.id} onClick={() => scrollToId(`player-${p.id}`)} className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-white/5 flex items-center justify-between">
+                    <span>{i === 0 ? '🏆 ' : `${i + 1}. `}{p.name}</span>
+                    <span className="text-xs font-bold" style={{ color: '#C8102E' }}>{Number.isInteger(p.points) ? p.points : p.points.toFixed(1)}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
+        <button
+          onClick={() => setJumpOpen(o => !o)}
+          className="flex items-center gap-2 px-4 py-3 rounded-full font-bold text-sm shadow-2xl transition-all"
+          style={{ background: '#C8102E', color: '#ffffff', boxShadow: '0 4px 20px rgba(200,16,46,0.4)' }}
+        >
+          {matchesToday && !jumpOpen && (
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ background: '#4ade80' }}></span>
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5" style={{ background: '#4ade80' }}></span>
+            </span>
+          )}
+          {jumpOpen ? '✕ Close' : '☰ Jump to'}
+        </button>
+      </div>
+
       {/* Password Modal */}
       {showLogin && (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{ background: 'rgba(0,0,0,0.7)' }}>
@@ -563,41 +599,6 @@ export default function App() {
         <div className="max-w-7xl mx-auto px-4 pt-4 pb-8">
           {/* Top row: status + admin, kept out of the way so the title can center */}
           <div className="flex items-center justify-end gap-3 mb-4">
-            {/* Jump menu */}
-            <div className="relative">
-              <button
-                onClick={() => setJumpOpen(o => !o)}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-full font-bold text-xs transition"
-                style={{ background: 'rgba(255,255,255,0.05)', color: '#cbd5e1', border: '1px solid rgba(255,255,255,0.1)' }}
-              >
-                {matchesToday && (
-                  <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ background: '#4ade80' }}></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2" style={{ background: '#4ade80' }}></span>
-                  </span>
-                )}
-                ☰ Jump to
-              </button>
-              {jumpOpen && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setJumpOpen(false)}></div>
-                  <div className="absolute right-0 mt-2 w-56 rounded-xl z-50 overflow-hidden shadow-xl" style={{ background: '#071e38', border: '1px solid rgba(255,255,255,0.1)' }}>
-                    <div className="px-3 py-2 text-[10px] uppercase tracking-wide font-black text-gray-500" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>Sections</div>
-                    <button onClick={() => scrollToId('standings')} className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-white/5">🏆 Standings</button>
-                    <button onClick={() => { setView('matches'); scrollToId('matches'); }} className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-white/5">⚽ Matches</button>
-                    <div className="px-3 py-2 text-[10px] uppercase tracking-wide font-black text-gray-500" style={{ borderTop: '1px solid rgba(255,255,255,0.06)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>Jump to owner</div>
-                    <div className="max-h-52 overflow-y-auto">
-                      {leaderboard.map((p, i) => (
-                        <button key={p.id} onClick={() => scrollToId(`player-${p.id}`)} className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-white/5 flex items-center justify-between">
-                          <span>{i === 0 ? '🏆 ' : `${i + 1}. `}{p.name}</span>
-                          <span className="text-xs font-bold" style={{ color: '#C8102E' }}>{Number.isInteger(p.points) ? p.points : p.points.toFixed(1)}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
             <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full font-bold text-xs" style={{ background: 'rgba(34,197,94,0.12)', color: '#4ade80', border: '1px solid rgba(34,197,94,0.3)' }}>
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ background: '#4ade80' }}></span>
@@ -624,10 +625,11 @@ export default function App() {
             )}
           </div>
 
-          {/* Centered title block */}
+          {/* Centered title block — trophy is absolutely placed so the
+              text + subtitle center together as one column */}
           <div className="flex flex-col items-center text-center">
-            <div className="flex items-center gap-3">
-              <svg width="48" height="48" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="World Cup trophy" className="drop-shadow">
+            <div className="relative inline-flex flex-col items-center">
+              <svg width="48" height="48" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="World Cup trophy" className="hidden sm:block absolute drop-shadow" style={{ right: 'calc(100% + 12px)', top: '4px' }}>
                 <defs>
                   <linearGradient id="wcGold" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="#FCE38A" />
@@ -635,20 +637,17 @@ export default function App() {
                     <stop offset="100%" stopColor="#B8860B" />
                   </linearGradient>
                 </defs>
-                {/* Globe at the top */}
                 <ellipse cx="32" cy="13" rx="10" ry="9" fill="url(#wcGold)" stroke="#8a6508" strokeWidth="0.8" />
                 <path d="M22.5 11 H41.5 M24 16 H40 M32 4.5 V21.5" stroke="#8a6508" strokeWidth="0.7" opacity="0.6" fill="none" />
-                {/* Twisted body: two figures spiraling up to support the globe */}
                 <path d="M26 21 C20 28, 22 40, 28 47 L30 47 C25 40, 24 30, 30 22 Z" fill="url(#wcGold)" stroke="#8a6508" strokeWidth="0.7" />
                 <path d="M38 21 C44 28, 42 40, 36 47 L34 47 C39 40, 40 30, 34 22 Z" fill="url(#wcGold)" stroke="#8a6508" strokeWidth="0.7" />
-                {/* Base */}
                 <path d="M25 47 H39 L41 53 H23 Z" fill="url(#wcGold)" stroke="#8a6508" strokeWidth="0.7" />
                 <rect x="21" y="53" width="22" height="5" rx="1.5" fill="#1a1206" stroke="#8a6508" strokeWidth="0.7" />
                 <rect x="23" y="54.5" width="18" height="2" rx="1" fill="url(#wcGold)" opacity="0.85" />
               </svg>
               <h1 className="text-4xl sm:text-6xl font-black tracking-tight" style={{ color: '#C8102E', textShadow: '0 2px 20px rgba(200,16,46,0.3)' }}>HOOD RATS</h1>
+              <p className="text-gray-400 text-sm sm:text-base mt-2 tracking-[0.3em] uppercase font-semibold">2026 World Cup Pool</p>
             </div>
-            <p className="text-gray-400 text-sm sm:text-base mt-2 tracking-[0.3em] uppercase font-semibold">2026 World Cup Pool</p>
           </div>
         </div>
       </div>
@@ -688,18 +687,32 @@ export default function App() {
                       border: live ? '1px solid rgba(74,222,128,0.4)' : '1px solid rgba(255,255,255,0.06)'
                     }}
                   >
-                    <span className="text-base leading-none">{COUNTRY_FLAGS[m.team1] || '🏳️'}</span>
-                    <span className="text-xs font-bold text-white whitespace-nowrap">{m.team1}</span>
+                    <div className="flex flex-col items-center min-w-0">
+                      <div className="flex items-center gap-1">
+                        <span className="text-base leading-none">{COUNTRY_FLAGS[m.team1] || '🏳️'}</span>
+                        <span className="text-xs font-bold text-white whitespace-nowrap">{m.team1}</span>
+                      </div>
+                      {getPlayersForTeam(m.team1).length > 0 && (
+                        <span className="text-[9px] whitespace-nowrap" style={{ color: '#C8102E' }}>{getPlayersForTeam(m.team1).map(p => p.name).join(', ')}</span>
+                      )}
+                    </div>
                     {hasScore ? (
-                      <span className="text-xs font-black px-1.5" style={{ color: live ? '#4ade80' : '#ffffff' }}>
+                      <span className="text-sm font-black px-1.5 shrink-0" style={{ color: live ? '#4ade80' : '#ffffff' }}>
                         {md.home}–{md.away}
                       </span>
                     ) : (
-                      <span className="text-xs text-gray-500 px-1">vs</span>
+                      <span className="text-xs text-gray-500 px-1 shrink-0">vs</span>
                     )}
-                    <span className="text-xs font-bold text-white whitespace-nowrap">{m.team2}</span>
-                    <span className="text-base leading-none">{COUNTRY_FLAGS[m.team2] || '🏳️'}</span>
-                    <span className="text-[10px] font-bold uppercase ml-1 px-1.5 py-0.5 rounded whitespace-nowrap" style={{
+                    <div className="flex flex-col items-center min-w-0">
+                      <div className="flex items-center gap-1">
+                        <span className="text-base leading-none">{COUNTRY_FLAGS[m.team2] || '🏳️'}</span>
+                        <span className="text-xs font-bold text-white whitespace-nowrap">{m.team2}</span>
+                      </div>
+                      {getPlayersForTeam(m.team2).length > 0 && (
+                        <span className="text-[9px] whitespace-nowrap" style={{ color: '#C8102E' }}>{getPlayersForTeam(m.team2).map(p => p.name).join(', ')}</span>
+                      )}
+                    </div>
+                    <span className="text-[10px] font-bold uppercase ml-1 px-1.5 py-0.5 rounded whitespace-nowrap shrink-0" style={{
                       background: live ? '#4ade80' : finished ? 'rgba(200,16,46,0.8)' : 'rgba(255,255,255,0.1)',
                       color: live ? '#040d18' : finished ? '#ffffff' : '#9ca3af'
                     }}>
