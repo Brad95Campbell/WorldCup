@@ -215,6 +215,7 @@ export default function App() {
   const [adminPassword, setAdminPassword] = useState('');
   const [loginError, setLoginError] = useState('');
   const [busyMatch, setBusyMatch] = useState(null);
+  const [jumpOpen, setJumpOpen] = useState(false);
 
   // Load results from Supabase and subscribe to live changes
   useEffect(() => {
@@ -346,6 +347,13 @@ export default function App() {
   };
 
   const isLiveStatus = (s) => s === 'IN_PLAY' || s === 'PAUSED';
+  const todayStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD local
+
+  const scrollToId = (id) => {
+    setJumpOpen(false);
+    const el = document.getElementById(id);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   // Parse a match's date + "3:00 PM ET" time into a sortable Date.
   const matchKickoff = (m) => {
@@ -372,14 +380,16 @@ export default function App() {
     return upcoming ? { match: upcoming, live: false } : null;
   };
 
-  // Short opponent label for a team's next match, e.g. "vs Brazil 3:00".
+  // Short opponent label for a team's next match, e.g. "vs Brazil · Jun 17 3:00".
+  const shortDate = (d) => new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   const nextMatchLabel = (team) => {
     const nm = nextMatchForTeam(team);
     if (!nm) return null;
     const opp = nm.match.team1 === team ? nm.match.team2 : nm.match.team1;
     if (nm.live) return { live: true, opp };
     const time = nm.match.time.replace(' ET', '').replace(/:00/, '').replace(/\s/, '');
-    return { live: false, opp, time };
+    const isToday = nm.match.date === todayStr;
+    return { live: false, opp, time, date: shortDate(nm.match.date), isToday };
   };
 
   const getPlayerStats = () => {
@@ -423,19 +433,27 @@ export default function App() {
   const calculatePoints = () => {
     return PLAYERS.map(player => {
       let points = 0;
+      let remaining = 0;
       MATCHES.forEach(match => {
+        const isPlayers = player.teams.includes(match.team1) || player.teams.includes(match.team2);
         const result = results[match.id];
-        if (result === 'draw' && (player.teams.includes(match.team1) || player.teams.includes(match.team2))) {
+        if (result === 'draw' && isPlayers) {
           points += 0.5;
         } else if (result && result !== 'draw' && player.teams.includes(result)) {
           points += 1;
         }
+        // A match counts as "remaining" for this player if one of their teams
+        // is in it and it hasn't completed yet (no result, not FINISHED).
+        if (isPlayers && !result && meta[match.id]?.status !== 'FINISHED') {
+          remaining += 1;
+        }
       });
       const oddsSum = player.teams.reduce((sum, team) => sum + (ODDS[team] ?? 999999), 0);
-      return { ...player, points, oddsSum };
+      return { ...player, points, oddsSum, remaining };
     }).sort((a, b) => {
-      if (b.points !== a.points) return b.points - a.points;
-      return a.oddsSum - b.oddsSum;
+      if (b.points !== a.points) return b.points - a.points;       // most points
+      if (b.remaining !== a.remaining) return b.remaining - a.remaining; // more games left
+      return a.oddsSum - b.oddsSum;                                 // lowest odds sum
     });
   };
 
@@ -451,8 +469,22 @@ export default function App() {
 
   const sortedDates = Object.keys(groupedMatches).sort();
 
+  // A match belongs in "Completed" only the day AFTER it finished: it must be
+  // finished/have a result AND its date must be before today. Finished games
+  // from today stay in Upcoming for the rest of the day.
+  const isCompletedMatch = (m) => {
+    const done = !!results[m.id] || meta[m.id]?.status === 'FINISHED';
+    return done && m.date < todayStr;
+  };
+
+  const upcomingDates = sortedDates.filter(d => groupedMatches[d].some(m => !isCompletedMatch(m)));
+  const completedDates = sortedDates.filter(d => groupedMatches[d].some(m => isCompletedMatch(m)));
+
+  // Is there at least one match scheduled for today?
+  const matchesToday = (groupedMatches[todayStr] || []).length > 0;
+  const todayCount = (groupedMatches[todayStr] || []).length;
+
   // ----- Ticker: matches for "today" (or the next upcoming match day) -----
-  const todayStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD in local time
   const anyLiveNow = MATCHES.some(m => isLiveStatus(meta[m.id]?.status));
 
   let tickerDate = todayStr;
@@ -531,6 +563,41 @@ export default function App() {
         <div className="max-w-7xl mx-auto px-4 pt-4 pb-8">
           {/* Top row: status + admin, kept out of the way so the title can center */}
           <div className="flex items-center justify-end gap-3 mb-4">
+            {/* Jump menu */}
+            <div className="relative">
+              <button
+                onClick={() => setJumpOpen(o => !o)}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-full font-bold text-xs transition"
+                style={{ background: 'rgba(255,255,255,0.05)', color: '#cbd5e1', border: '1px solid rgba(255,255,255,0.1)' }}
+              >
+                {matchesToday && (
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ background: '#4ade80' }}></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2" style={{ background: '#4ade80' }}></span>
+                  </span>
+                )}
+                ☰ Jump to
+              </button>
+              {jumpOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setJumpOpen(false)}></div>
+                  <div className="absolute right-0 mt-2 w-56 rounded-xl z-50 overflow-hidden shadow-xl" style={{ background: '#071e38', border: '1px solid rgba(255,255,255,0.1)' }}>
+                    <div className="px-3 py-2 text-[10px] uppercase tracking-wide font-black text-gray-500" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>Sections</div>
+                    <button onClick={() => scrollToId('standings')} className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-white/5">🏆 Standings</button>
+                    <button onClick={() => { setView('matches'); scrollToId('matches'); }} className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-white/5">⚽ Matches</button>
+                    <div className="px-3 py-2 text-[10px] uppercase tracking-wide font-black text-gray-500" style={{ borderTop: '1px solid rgba(255,255,255,0.06)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>Jump to owner</div>
+                    <div className="max-h-52 overflow-y-auto">
+                      {leaderboard.map((p, i) => (
+                        <button key={p.id} onClick={() => scrollToId(`player-${p.id}`)} className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-white/5 flex items-center justify-between">
+                          <span>{i === 0 ? '🏆 ' : `${i + 1}. `}{p.name}</span>
+                          <span className="text-xs font-bold" style={{ color: '#C8102E' }}>{Number.isInteger(p.points) ? p.points : p.points.toFixed(1)}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
             <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full font-bold text-xs" style={{ background: 'rgba(34,197,94,0.12)', color: '#4ade80', border: '1px solid rgba(34,197,94,0.3)' }}>
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ background: '#4ade80' }}></span>
@@ -586,74 +653,90 @@ export default function App() {
         </div>
       </div>
 
-      {/* ===== Match Ticker ===== */}
+      {/* ===== Match Ticker (solid wrapping field, no scroll) ===== */}
       {tickerMatches.length > 0 && (
-        <div style={{ background: 'rgba(4, 13, 24, 0.95)', borderBottom: '1px solid rgba(200,16,46,0.3)' }}>
+        <div id="ticker" style={{ background: 'rgba(4, 13, 24, 0.95)', borderBottom: '1px solid rgba(200,16,46,0.3)' }}>
           <div className="max-w-7xl mx-auto px-4 py-3">
-            <div className="flex items-center gap-3">
-              <div className="shrink-0 flex items-center gap-2 pr-3" style={{ borderRight: '1px solid rgba(255,255,255,0.1)' }}>
-                {anyLiveNow ? (
-                  <span className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wide" style={{ color: '#4ade80' }}>
-                    <span className="relative flex h-2 w-2">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ background: '#4ade80' }}></span>
-                      <span className="relative inline-flex rounded-full h-2 w-2" style={{ background: '#4ade80' }}></span>
+            <div className="flex items-center gap-2 mb-2">
+              {anyLiveNow ? (
+                <span className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wide" style={{ color: '#4ade80' }}>
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ background: '#4ade80' }}></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2" style={{ background: '#4ade80' }}></span>
+                  </span>
+                  Live Now
+                </span>
+              ) : (
+                <span className="text-xs font-black uppercase tracking-wide" style={{ color: '#C8102E' }}>
+                  {tickerIsToday ? "Today's Matches" : new Date(tickerDate + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
+                </span>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {tickerMatches.map(m => {
+                const r = results[m.id];
+                const md = meta[m.id] || {};
+                const live = isLiveStatus(md.status);
+                const finished = md.status === 'FINISHED' || !!r;
+                const hasScore = md.home != null && md.away != null;
+                return (
+                  <div
+                    key={m.id}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg"
+                    style={{
+                      background: live ? 'rgba(74,222,128,0.12)' : 'rgba(255,255,255,0.04)',
+                      border: live ? '1px solid rgba(74,222,128,0.4)' : '1px solid rgba(255,255,255,0.06)'
+                    }}
+                  >
+                    <span className="text-base leading-none">{COUNTRY_FLAGS[m.team1] || '🏳️'}</span>
+                    <span className="text-xs font-bold text-white whitespace-nowrap">{m.team1}</span>
+                    {hasScore ? (
+                      <span className="text-xs font-black px-1.5" style={{ color: live ? '#4ade80' : '#ffffff' }}>
+                        {md.home}–{md.away}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-gray-500 px-1">vs</span>
+                    )}
+                    <span className="text-xs font-bold text-white whitespace-nowrap">{m.team2}</span>
+                    <span className="text-base leading-none">{COUNTRY_FLAGS[m.team2] || '🏳️'}</span>
+                    <span className="text-[10px] font-bold uppercase ml-1 px-1.5 py-0.5 rounded whitespace-nowrap" style={{
+                      background: live ? '#4ade80' : finished ? 'rgba(200,16,46,0.8)' : 'rgba(255,255,255,0.1)',
+                      color: live ? '#040d18' : finished ? '#ffffff' : '#9ca3af'
+                    }}>
+                      {live ? (md.status === 'PAUSED' ? 'HT' : 'Live') : finished ? 'FT' : m.time.replace(' ET', '')}
                     </span>
-                    Live
-                  </span>
-                ) : (
-                  <span className="text-xs font-black uppercase tracking-wide" style={{ color: '#C8102E' }}>
-                    {tickerIsToday ? 'Today' : new Date(tickerDate + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
-                  </span>
-                )}
-              </div>
-              <div className="flex-1 overflow-x-auto">
-                <div className="flex items-center gap-3" style={{ width: 'max-content' }}>
-                  {tickerMatches.map(m => {
-                    const r = results[m.id];
-                    const md = meta[m.id] || {};
-                    const live = isLiveStatus(md.status);
-                    const finished = md.status === 'FINISHED' || !!r;
-                    const hasScore = md.home != null && md.away != null;
-                    return (
-                      <div
-                        key={m.id}
-                        className="shrink-0 flex items-center gap-2 px-3 py-1.5 rounded-lg"
-                        style={{
-                          background: live ? 'rgba(74,222,128,0.12)' : 'rgba(255,255,255,0.04)',
-                          border: live ? '1px solid rgba(74,222,128,0.4)' : '1px solid rgba(255,255,255,0.06)'
-                        }}
-                      >
-                        <span className="text-base leading-none">{COUNTRY_FLAGS[m.team1] || '🏳️'}</span>
-                        <span className="text-xs font-bold text-white whitespace-nowrap">{m.team1}</span>
-                        {hasScore ? (
-                          <span className="text-xs font-black px-1.5" style={{ color: live ? '#4ade80' : '#ffffff' }}>
-                            {md.home}–{md.away}
-                          </span>
-                        ) : (
-                          <span className="text-xs text-gray-500 px-1">vs</span>
-                        )}
-                        <span className="text-xs font-bold text-white whitespace-nowrap">{m.team2}</span>
-                        <span className="text-base leading-none">{COUNTRY_FLAGS[m.team2] || '🏳️'}</span>
-                        <span className="text-[10px] font-bold uppercase ml-1 px-1.5 py-0.5 rounded whitespace-nowrap" style={{
-                          background: live ? '#4ade80' : finished ? 'rgba(200,16,46,0.8)' : 'rgba(255,255,255,0.1)',
-                          color: live ? '#040d18' : finished ? '#ffffff' : '#9ca3af'
-                        }}>
-                          {live ? (md.status === 'PAUSED' ? 'HT' : 'Live') : finished ? 'FT' : m.time.replace(' ET', '')}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
       )}
 
+      {/* ===== "Matches today" notification banner ===== */}
+      {matchesToday && (
+        <button
+          onClick={() => scrollToId('ticker')}
+          className="w-full text-left"
+          style={{ background: anyLiveNow ? 'rgba(74,222,128,0.1)' : 'rgba(200,16,46,0.12)', borderBottom: `1px solid ${anyLiveNow ? 'rgba(74,222,128,0.3)' : 'rgba(200,16,46,0.3)'}` }}
+        >
+          <div className="max-w-7xl mx-auto px-4 py-2.5 flex items-center gap-2 text-sm font-bold" style={{ color: anyLiveNow ? '#4ade80' : '#ff8095' }}>
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ background: anyLiveNow ? '#4ade80' : '#C8102E' }}></span>
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5" style={{ background: anyLiveNow ? '#4ade80' : '#C8102E' }}></span>
+            </span>
+            {anyLiveNow
+              ? `${liveMatches.length} match${liveMatches.length > 1 ? 'es' : ''} live right now`
+              : `${todayCount} match${todayCount > 1 ? 'es' : ''} today`}
+            <span className="text-xs font-normal opacity-70 ml-1">— tap to view</span>
+          </div>
+        </button>
+      )}
+
       <div className="max-w-7xl mx-auto px-4 py-10">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
           {/* Leaderboard Sidebar */}
-          <div className="lg:col-span-1">
+          <div className="lg:col-span-1" id="standings" style={{ scrollMarginTop: '90px' }}>
             <h2 className="text-xl font-black text-white mb-4 uppercase tracking-wide flex items-center gap-2">
               <span className="h-5 w-1 rounded-full" style={{ background: '#C8102E' }}></span>
               Standings
@@ -672,8 +755,10 @@ export default function App() {
                 return (
                   <div
                     key={player.id}
+                    id={`player-${player.id}`}
                     className="rounded-xl p-4 transition-all"
                     style={{
+                      scrollMarginTop: '90px',
                       background: index === 0 ? 'linear-gradient(135deg, rgba(200,16,46,0.2) 0%, rgba(4,13,24,0.85) 100%)' : 'rgba(4, 13, 24, 0.7)',
                       border: index === 0 ? '1px solid rgba(251,191,36,0.4)' : '1px solid rgba(255,255,255,0.05)',
                       boxShadow: index === 0 ? '0 0 24px rgba(251,191,36,0.08)' : 'none'
@@ -697,13 +782,14 @@ export default function App() {
                           if (!upcoming) return null;
                           const ownTeam = player.teams.find(t => upcoming.match.team1 === t || upcoming.match.team2 === t);
                           const opp = upcoming.match.team1 === ownTeam ? upcoming.match.team2 : upcoming.match.team1;
+                          const oToday = upcoming.match.date === todayStr;
                           return (
                             <div className="text-[10px] mt-0.5 flex items-center gap-1" style={{ color: upcoming.live ? '#4ade80' : '#6b7280' }}>
                               <span>{COUNTRY_FLAGS[ownTeam]}</span>
                               {upcoming.live ? (
                                 <span className="font-bold">LIVE vs {opp}</span>
                               ) : (
-                                <span>next: vs {opp} · {upcoming.match.time.replace(' ET', '').replace(':00', '')}</span>
+                                <span>next: vs {opp} · {oToday ? <span className="font-bold" style={{ color: '#4ade80' }}>Today</span> : shortDate(upcoming.match.date)} {upcoming.match.time.replace(' ET', '').replace(':00', '')}</span>
                               )}
                             </div>
                           );
@@ -753,7 +839,7 @@ export default function App() {
                                   Live · vs {nm.opp}
                                 </span>
                               ) : (
-                                <span>vs {nm.opp} · {nm.time}</span>
+                                <span>vs {nm.opp} · {nm.isToday ? <span className="font-bold" style={{ color: '#4ade80' }}>Today</span> : nm.date} {nm.time}</span>
                               )}
                             </div>
                           )}
@@ -768,21 +854,31 @@ export default function App() {
           </div>
 
           {/* Matches Section */}
-          <div className="lg:col-span-3">
+          <div className="lg:col-span-3" id="matches" style={{ scrollMarginTop: '90px' }}>
             <div className="inline-flex gap-1 mb-6 p-1 rounded-full" style={{ background: 'rgba(4, 13, 24, 0.85)', border: '1px solid rgba(255,255,255,0.06)' }}>
               <button
                 onClick={() => setView('matches')}
-                className="px-6 py-2 rounded-full font-bold text-sm transition-all"
+                className="px-5 py-2 rounded-full font-bold text-sm transition-all"
                 style={{
                   background: view === 'matches' ? '#C8102E' : 'transparent',
                   color: view === 'matches' ? '#ffffff' : '#9ca3af'
                 }}
               >
-                Matches
+                Upcoming
+              </button>
+              <button
+                onClick={() => setView('completed')}
+                className="px-5 py-2 rounded-full font-bold text-sm transition-all"
+                style={{
+                  background: view === 'completed' ? '#C8102E' : 'transparent',
+                  color: view === 'completed' ? '#ffffff' : '#9ca3af'
+                }}
+              >
+                Completed
               </button>
               <button
                 onClick={() => setView('stats')}
-                className="px-6 py-2 rounded-full font-bold text-sm transition-all"
+                className="px-5 py-2 rounded-full font-bold text-sm transition-all"
                 style={{
                   background: view === 'stats' ? '#C8102E' : 'transparent',
                   color: view === 'stats' ? '#ffffff' : '#9ca3af'
@@ -792,11 +888,18 @@ export default function App() {
               </button>
             </div>
 
-            {view === 'matches' ? (
+            {(view === 'matches' || view === 'completed') ? (
               <div>
-                <h2 className="text-2xl font-bold text-white mb-6">Matches</h2>
+                <h2 className="text-2xl font-bold text-white mb-6">{view === 'completed' ? 'Completed Matches' : 'Upcoming Matches'}</h2>
+            {(() => {
+              const showDates = view === 'completed' ? completedDates : upcomingDates;
+              const matchFilter = (m) => view === 'completed' ? isCompletedMatch(m) : !isCompletedMatch(m);
+              if (showDates.length === 0) {
+                return <div className="text-gray-500 text-sm py-8 text-center rounded-xl" style={{ background: 'rgba(4,13,24,0.5)' }}>{view === 'completed' ? 'No completed matches yet. Games move here the day after they finish.' : 'No upcoming matches.'}</div>;
+              }
+              return (
             <div className="space-y-8">
-              {sortedDates.map(date => (
+              {(view === 'completed' ? [...showDates].reverse() : showDates).map(date => (
                 <div key={date}>
                   <div className="flex items-center gap-2 mb-4">
                     <div className="h-4 w-1 rounded-full" style={{ background: date === todayStr ? '#4ade80' : '#C8102E' }}></div>
@@ -812,7 +915,7 @@ export default function App() {
                     )}
                   </div>
                   <div className="space-y-3">
-                    {groupedMatches[date].map(match => {
+                    {groupedMatches[date].filter(matchFilter).map(match => {
                       const result = results[match.id];
                       const md = meta[match.id] || {};
                       const live = md.status === 'IN_PLAY' || md.status === 'PAUSED';
@@ -987,6 +1090,8 @@ export default function App() {
                 </div>
               ))}
                 </div>
+              );
+            })()}
               </div>
             ) : (
               <div>
