@@ -745,18 +745,19 @@ export default function App() {
         </div>
       )}
 
-      {/* ===== Quick-look leaderboard (1–10, name + points) ===== */}
+      {/* ===== Quick-look leaderboard (3-column grid, name + points) ===== */}
       <div style={{ background: 'rgba(4, 13, 24, 0.6)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
         <div className="max-w-7xl mx-auto px-4 py-3">
-          <div className="text-[10px] uppercase tracking-wide font-black text-gray-500 mb-2">Standings</div>
-          <div className="flex flex-wrap gap-2">
+          <div className="text-[10px] uppercase tracking-wide font-black text-gray-500 mb-2">Leaderboard</div>
+          <div className="grid grid-cols-3 gap-2">
             {leaderboard.map((p, i) => {
               const m = medal(i);
+              const isLast = i === leaderboard.length - 1;
               return (
               <button
                 key={p.id}
                 onClick={() => scrollToId(`player-${p.id}`)}
-                className="flex items-center gap-2 pl-1.5 pr-3 py-1 rounded-full transition-all hover:brightness-125"
+                className="flex items-center gap-2 px-2 py-1.5 rounded-lg transition-all hover:brightness-125"
                 style={{
                   background: m ? m.tint : 'rgba(255,255,255,0.05)',
                   border: m ? `1px solid ${m.border}` : '1px solid rgba(255,255,255,0.08)'
@@ -766,10 +767,10 @@ export default function App() {
                   background: m ? m.solid : 'rgba(255,255,255,0.1)',
                   color: m ? m.text : '#9ca3af'
                 }}>
-                  {i + 1}
+                  {isLast ? '💩' : i + 1}
                 </span>
-                <span className="text-xs font-bold text-white whitespace-nowrap">{p.name}</span>
-                <span className="text-xs font-black whitespace-nowrap" style={{ color: '#C8102E' }}>
+                <span className="text-xs font-bold text-white truncate flex-1 text-left">{p.name}</span>
+                <span className="text-xs font-black whitespace-nowrap shrink-0" style={{ color: '#C8102E' }}>
                   {Number.isInteger(p.points) ? p.points : p.points.toFixed(1)}
                 </span>
               </button>
