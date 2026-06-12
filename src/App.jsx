@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { supabase, functionsUrl, anonKey } from './supabaseClient';
-import { Trophy } from 'lucide-react';
 
 const COUNTRY_FLAGS = {
   'Mexico': '🇲🇽', 'South Africa': '🇿🇦', 'Korea Republic': '🇰🇷', 'Czechia': '🇨🇿',
@@ -432,6 +431,18 @@ export default function App() {
   }
   const tickerIsToday = tickerDate === todayStr;
 
+  // Make sure any live match appears in the ticker even if its calendar date
+  // differs (e.g. a midnight kickoff), then sort so LIVE matches come first.
+  const liveMatches = MATCHES.filter(m => isLiveStatus(meta[m.id]?.status));
+  const tickerIds = new Set(tickerMatches.map(m => m.id));
+  const extraLive = liveMatches.filter(m => !tickerIds.has(m.id));
+  tickerMatches = [...extraLive, ...tickerMatches].sort((a, b) => {
+    const aLive = isLiveStatus(meta[a.id]?.status) ? 0 : 1;
+    const bLive = isLiveStatus(meta[b.id]?.status) ? 0 : 1;
+    if (aLive !== bLive) return aLive - bLive;   // live first
+    return a.id - b.id;                          // then chronological
+  });
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: 'linear-gradient(160deg, #040d18 0%, #081a32 50%, #0a0d18 100%)' }}>
@@ -485,10 +496,28 @@ export default function App() {
           <div className="flex items-center justify-between">
             <div>
               <div className="flex items-center gap-3 mb-2">
-                <Trophy style={{ color: '#C8102E' }} size={40} />
-                <h1 className="text-5xl font-black" style={{ color: '#C8102E' }}>WORLD CUP 2026</h1>
+                <svg width="44" height="44" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="World Cup trophy">
+                  <defs>
+                    <linearGradient id="wcGold" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#FCE38A" />
+                      <stop offset="45%" stopColor="#E6B53C" />
+                      <stop offset="100%" stopColor="#B8860B" />
+                    </linearGradient>
+                  </defs>
+                  {/* Globe at the top */}
+                  <ellipse cx="32" cy="13" rx="10" ry="9" fill="url(#wcGold)" stroke="#8a6508" strokeWidth="0.8" />
+                  <path d="M22.5 11 H41.5 M24 16 H40 M32 4.5 V21.5" stroke="#8a6508" strokeWidth="0.7" opacity="0.6" fill="none" />
+                  {/* Twisted body: two figures spiraling up to support the globe */}
+                  <path d="M26 21 C20 28, 22 40, 28 47 L30 47 C25 40, 24 30, 30 22 Z" fill="url(#wcGold)" stroke="#8a6508" strokeWidth="0.7" />
+                  <path d="M38 21 C44 28, 42 40, 36 47 L34 47 C39 40, 40 30, 34 22 Z" fill="url(#wcGold)" stroke="#8a6508" strokeWidth="0.7" />
+                  {/* Base */}
+                  <path d="M25 47 H39 L41 53 H23 Z" fill="url(#wcGold)" stroke="#8a6508" strokeWidth="0.7" />
+                  <rect x="21" y="53" width="22" height="5" rx="1.5" fill="#1a1206" stroke="#8a6508" strokeWidth="0.7" />
+                  <rect x="23" y="54.5" width="18" height="2" rx="1" fill="url(#wcGold)" opacity="0.85" />
+                </svg>
+                <h1 className="text-4xl sm:text-5xl font-black" style={{ color: '#C8102E' }}>HOOD RATS</h1>
               </div>
-              <p className="text-gray-400 text-lg">Group Stage Pool Tracker</p>
+              <p className="text-gray-400 text-lg">2026 World Cup Pool</p>
             </div>
             <div className="flex items-center gap-3">
               <div className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm" style={{ background: 'rgba(34,197,94,0.15)', color: '#4ade80', border: '1px solid rgba(34,197,94,0.3)' }}>
