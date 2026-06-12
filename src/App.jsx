@@ -345,6 +345,43 @@ export default function App() {
     return PLAYERS.filter(player => player.teams.includes(team));
   };
 
+  const isLiveStatus = (s) => s === 'IN_PLAY' || s === 'PAUSED';
+
+  // Parse a match's date + "3:00 PM ET" time into a sortable Date.
+  const matchKickoff = (m) => {
+    const t = m.time.replace(' ET', '').trim();
+    const mt = t.match(/(\d+):(\d+)\s*(AM|PM)/i);
+    let h = 0, min = 0;
+    if (mt) {
+      h = parseInt(mt[1], 10) % 12;
+      if (/PM/i.test(mt[3])) h += 12;
+      min = parseInt(mt[2], 10);
+    }
+    return new Date(`${m.date}T${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}:00`);
+  };
+
+  // For a team: the match that's live now, else the soonest match without a
+  // recorded result, else null (all done). Returns { match, live }.
+  const nextMatchForTeam = (team) => {
+    const teamMatches = MATCHES
+      .filter(m => m.team1 === team || m.team2 === team)
+      .sort((a, b) => matchKickoff(a) - matchKickoff(b));
+    const liveOne = teamMatches.find(m => isLiveStatus(meta[m.id]?.status));
+    if (liveOne) return { match: liveOne, live: true };
+    const upcoming = teamMatches.find(m => !results[m.id] && meta[m.id]?.status !== 'FINISHED');
+    return upcoming ? { match: upcoming, live: false } : null;
+  };
+
+  // Short opponent label for a team's next match, e.g. "vs Brazil 3:00".
+  const nextMatchLabel = (team) => {
+    const nm = nextMatchForTeam(team);
+    if (!nm) return null;
+    const opp = nm.match.team1 === team ? nm.match.team2 : nm.match.team1;
+    if (nm.live) return { live: true, opp };
+    const time = nm.match.time.replace(' ET', '').replace(/:00/, '').replace(/\s/, '');
+    return { live: false, opp, time };
+  };
+
   const getPlayerStats = () => {
     return PLAYERS.map(player => {
       const stats = {
@@ -416,7 +453,6 @@ export default function App() {
 
   // ----- Ticker: matches for "today" (or the next upcoming match day) -----
   const todayStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD in local time
-  const isLiveStatus = (s) => s === 'IN_PLAY' || s === 'PAUSED';
   const anyLiveNow = MATCHES.some(m => isLiveStatus(meta[m.id]?.status));
 
   let tickerDate = todayStr;
@@ -452,7 +488,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen" style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)' }}>
+    <div className="min-h-screen" style={{ background: 'linear-gradient(160deg, #040d18 0%, #081a32 50%, #0a0d18 100%)', backgroundAttachment: 'fixed' }}>
 
       {/* Password Modal */}
       {showLogin && (
@@ -491,60 +527,61 @@ export default function App() {
       )}
 
       {/* Header */}
-      <div className="border-b" style={{ borderColor: 'rgba(200, 16, 46, 0.5)' }}>
-        <div className="max-w-7xl mx-auto px-4 py-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="flex items-center gap-3 mb-2">
-                <svg width="44" height="44" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="World Cup trophy">
-                  <defs>
-                    <linearGradient id="wcGold" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#FCE38A" />
-                      <stop offset="45%" stopColor="#E6B53C" />
-                      <stop offset="100%" stopColor="#B8860B" />
-                    </linearGradient>
-                  </defs>
-                  {/* Globe at the top */}
-                  <ellipse cx="32" cy="13" rx="10" ry="9" fill="url(#wcGold)" stroke="#8a6508" strokeWidth="0.8" />
-                  <path d="M22.5 11 H41.5 M24 16 H40 M32 4.5 V21.5" stroke="#8a6508" strokeWidth="0.7" opacity="0.6" fill="none" />
-                  {/* Twisted body: two figures spiraling up to support the globe */}
-                  <path d="M26 21 C20 28, 22 40, 28 47 L30 47 C25 40, 24 30, 30 22 Z" fill="url(#wcGold)" stroke="#8a6508" strokeWidth="0.7" />
-                  <path d="M38 21 C44 28, 42 40, 36 47 L34 47 C39 40, 40 30, 34 22 Z" fill="url(#wcGold)" stroke="#8a6508" strokeWidth="0.7" />
-                  {/* Base */}
-                  <path d="M25 47 H39 L41 53 H23 Z" fill="url(#wcGold)" stroke="#8a6508" strokeWidth="0.7" />
-                  <rect x="21" y="53" width="22" height="5" rx="1.5" fill="#1a1206" stroke="#8a6508" strokeWidth="0.7" />
-                  <rect x="23" y="54.5" width="18" height="2" rx="1" fill="url(#wcGold)" opacity="0.85" />
-                </svg>
-                <h1 className="text-4xl sm:text-5xl font-black" style={{ color: '#C8102E' }}>HOOD RATS</h1>
-              </div>
-              <p className="text-gray-400 text-lg">2026 World Cup Pool</p>
+      <div className="border-b" style={{ borderColor: 'rgba(200, 16, 46, 0.35)', background: 'linear-gradient(180deg, rgba(200,16,46,0.08) 0%, rgba(4,13,24,0) 100%)' }}>
+        <div className="max-w-7xl mx-auto px-4 pt-4 pb-8">
+          {/* Top row: status + admin, kept out of the way so the title can center */}
+          <div className="flex items-center justify-end gap-3 mb-4">
+            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full font-bold text-xs" style={{ background: 'rgba(34,197,94,0.12)', color: '#4ade80', border: '1px solid rgba(34,197,94,0.3)' }}>
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ background: '#4ade80' }}></span>
+                <span className="relative inline-flex rounded-full h-2 w-2" style={{ background: '#4ade80' }}></span>
+              </span>
+              Live · Auto-updating
             </div>
+            {isAdmin ? (
+              <button
+                onClick={() => { setIsAdmin(false); setAdminPassword(''); }}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-full font-bold text-xs transition"
+                style={{ background: 'rgba(200,16,46,0.25)', color: '#ff6b81', border: '1px solid rgba(200,16,46,0.5)' }}
+              >
+                🔓 Admin on
+              </button>
+            ) : (
+              <button
+                onClick={() => setShowLogin(true)}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-full font-bold text-xs transition"
+                style={{ background: 'rgba(255,255,255,0.05)', color: '#9ca3af', border: '1px solid rgba(255,255,255,0.1)' }}
+              >
+                🔒 Admin
+              </button>
+            )}
+          </div>
+
+          {/* Centered title block */}
+          <div className="flex flex-col items-center text-center">
             <div className="flex items-center gap-3">
-              <div className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm" style={{ background: 'rgba(34,197,94,0.15)', color: '#4ade80', border: '1px solid rgba(34,197,94,0.3)' }}>
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ background: '#4ade80' }}></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2" style={{ background: '#4ade80' }}></span>
-                </span>
-                Live · Auto-updating
-              </div>
-              {isAdmin ? (
-                <button
-                  onClick={() => { setIsAdmin(false); setAdminPassword(''); }}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm"
-                  style={{ background: 'rgba(200,16,46,0.25)', color: '#C8102E', border: '1px solid rgba(200,16,46,0.5)' }}
-                >
-                  🔓 Admin on
-                </button>
-              ) : (
-                <button
-                  onClick={() => setShowLogin(true)}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm"
-                  style={{ background: 'rgba(255,255,255,0.06)', color: '#9ca3af', border: '1px solid rgba(255,255,255,0.1)' }}
-                >
-                  🔒 Admin
-                </button>
-              )}
+              <svg width="48" height="48" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="World Cup trophy" className="drop-shadow">
+                <defs>
+                  <linearGradient id="wcGold" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#FCE38A" />
+                    <stop offset="45%" stopColor="#E6B53C" />
+                    <stop offset="100%" stopColor="#B8860B" />
+                  </linearGradient>
+                </defs>
+                {/* Globe at the top */}
+                <ellipse cx="32" cy="13" rx="10" ry="9" fill="url(#wcGold)" stroke="#8a6508" strokeWidth="0.8" />
+                <path d="M22.5 11 H41.5 M24 16 H40 M32 4.5 V21.5" stroke="#8a6508" strokeWidth="0.7" opacity="0.6" fill="none" />
+                {/* Twisted body: two figures spiraling up to support the globe */}
+                <path d="M26 21 C20 28, 22 40, 28 47 L30 47 C25 40, 24 30, 30 22 Z" fill="url(#wcGold)" stroke="#8a6508" strokeWidth="0.7" />
+                <path d="M38 21 C44 28, 42 40, 36 47 L34 47 C39 40, 40 30, 34 22 Z" fill="url(#wcGold)" stroke="#8a6508" strokeWidth="0.7" />
+                {/* Base */}
+                <path d="M25 47 H39 L41 53 H23 Z" fill="url(#wcGold)" stroke="#8a6508" strokeWidth="0.7" />
+                <rect x="21" y="53" width="22" height="5" rx="1.5" fill="#1a1206" stroke="#8a6508" strokeWidth="0.7" />
+                <rect x="23" y="54.5" width="18" height="2" rx="1" fill="url(#wcGold)" opacity="0.85" />
+              </svg>
+              <h1 className="text-4xl sm:text-6xl font-black tracking-tight" style={{ color: '#C8102E', textShadow: '0 2px 20px rgba(200,16,46,0.3)' }}>HOOD RATS</h1>
             </div>
+            <p className="text-gray-400 text-sm sm:text-base mt-2 tracking-[0.3em] uppercase font-semibold">2026 World Cup Pool</p>
           </div>
         </div>
       </div>
@@ -617,8 +654,11 @@ export default function App() {
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
           {/* Leaderboard Sidebar */}
           <div className="lg:col-span-1">
-            <h2 className="text-2xl font-bold text-white mb-6">Standings</h2>
-            <div className="space-y-3">
+            <h2 className="text-xl font-black text-white mb-4 uppercase tracking-wide flex items-center gap-2">
+              <span className="h-5 w-1 rounded-full" style={{ background: '#C8102E' }}></span>
+              Standings
+            </h2>
+            <div className="space-y-2.5">
               {leaderboard.map((player, index) => {
                 const teamRecords = player.teams.map(team => {
                   const teamMatches = MATCHES.filter(m => m.team1 === team || m.team2 === team);
@@ -632,49 +672,94 @@ export default function App() {
                 return (
                   <div
                     key={player.id}
-                    className="rounded-lg p-4"
+                    className="rounded-xl p-4 transition-all"
                     style={{
-                      background: index === 0 ? 'rgba(200, 16, 46, 0.18)' : 'rgba(4, 13, 24, 0.85)',
-                      borderLeft: index === 0 ? '4px solid #fbbf24' : '4px solid rgba(255,255,255,0.05)'
+                      background: index === 0 ? 'linear-gradient(135deg, rgba(200,16,46,0.2) 0%, rgba(4,13,24,0.85) 100%)' : 'rgba(4, 13, 24, 0.7)',
+                      border: index === 0 ? '1px solid rgba(251,191,36,0.4)' : '1px solid rgba(255,255,255,0.05)',
+                      boxShadow: index === 0 ? '0 0 24px rgba(251,191,36,0.08)' : 'none'
                     }}
                   >
                     {/* Player Header */}
                     <div className="flex items-center justify-between mb-3">
-                      <div className="text-white font-bold text-sm">
-                        {index === 0 ? '🏆 ' : `${index + 1}. `}{player.name}
+                      <div className="min-w-0">
+                        <div className="text-white font-bold text-sm truncate">
+                          {index === 0 ? '🏆 ' : `${index + 1}. `}{player.name}
+                        </div>
+                        {(() => {
+                          // Owner's soonest upcoming match across all their teams.
+                          const upcoming = player.teams
+                            .map(t => nextMatchForTeam(t))
+                            .filter(Boolean)
+                            .sort((a, b) => {
+                              if (a.live !== b.live) return a.live ? -1 : 1;
+                              return matchKickoff(a.match) - matchKickoff(b.match);
+                            })[0];
+                          if (!upcoming) return null;
+                          const ownTeam = player.teams.find(t => upcoming.match.team1 === t || upcoming.match.team2 === t);
+                          const opp = upcoming.match.team1 === ownTeam ? upcoming.match.team2 : upcoming.match.team1;
+                          return (
+                            <div className="text-[10px] mt-0.5 flex items-center gap-1" style={{ color: upcoming.live ? '#4ade80' : '#6b7280' }}>
+                              <span>{COUNTRY_FLAGS[ownTeam]}</span>
+                              {upcoming.live ? (
+                                <span className="font-bold">LIVE vs {opp}</span>
+                              ) : (
+                                <span>next: vs {opp} · {upcoming.match.time.replace(' ET', '').replace(':00', '')}</span>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
-                      <div className="font-bold text-lg" style={{ color: '#C8102E' }}>
+                      <div className="font-bold text-lg shrink-0 ml-2" style={{ color: '#C8102E' }}>
                         {Number.isInteger(player.points) ? player.points : player.points.toFixed(1)} <span className="text-xs text-gray-500 font-normal">pts</span>
                       </div>
                     </div>
 
                     {/* Team breakdown */}
                     <div className="space-y-1">
-                      {teamRecords.map(({ team, wins, draws, losses, played, total }) => (
-                        <div key={team} className="flex items-center justify-between py-1 px-2 rounded" style={{ background: 'rgba(255,255,255,0.04)' }}>
-                          <div className="flex items-center gap-1 min-w-0">
-                            <span className="text-base leading-none">{COUNTRY_FLAGS[team] || '🏳️'}</span>
-                            <span className="text-gray-300 text-xs truncate">{team}</span>
+                      {teamRecords.map(({ team, wins, draws, losses, played, total }) => {
+                        const nm = nextMatchLabel(team);
+                        return (
+                        <div key={team} className="py-1.5 px-2 rounded-md" style={{ background: 'rgba(255,255,255,0.03)' }}>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span className="text-base leading-none">{COUNTRY_FLAGS[team] || '🏳️'}</span>
+                              <span className="text-gray-200 text-xs truncate">{team}</span>
+                            </div>
+                            <div className="flex items-center gap-1 ml-2 shrink-0">
+                              {ODDS[team] && (
+                                <span className="text-[10px] font-bold px-1 rounded" style={{ background: 'rgba(250, 204, 21, 0.12)', color: '#fde047' }}>
+                                  {formatOdds(ODDS[team])}
+                                </span>
+                              )}
+                              {played === 0 ? (
+                                <span className="text-gray-600 text-xs">–</span>
+                              ) : (
+                                <>
+                                  {wins > 0 && <span className="text-[10px] font-bold px-1 rounded" style={{ background: 'rgba(34,197,94,0.2)', color: '#4ade80' }}>{wins}W</span>}
+                                  {draws > 0 && <span className="text-[10px] font-bold px-1 rounded" style={{ background: 'rgba(250,204,21,0.2)', color: '#fde047' }}>{draws}D</span>}
+                                  {losses > 0 && <span className="text-[10px] font-bold px-1 rounded" style={{ background: 'rgba(239,68,68,0.2)', color: '#f87171' }}>{losses}L</span>}
+                                </>
+                              )}
+                            </div>
                           </div>
-                          <div className="flex items-center gap-1 ml-2 shrink-0">
-                            {ODDS[team] && (
-                              <span className="text-xs font-bold px-1 rounded" style={{ background: 'rgba(250, 204, 21, 0.15)', color: '#fde047' }}>
-                                {formatOdds(ODDS[team])}
-                              </span>
-                            )}
-                            {played === 0 ? (
-                              <span className="text-gray-600 text-xs">–</span>
-                            ) : (
-                              <>
-                                {wins > 0 && <span className="text-xs font-bold px-1 rounded" style={{ background: 'rgba(34,197,94,0.2)', color: '#4ade80' }}>{wins}W</span>}
-                                {draws > 0 && <span className="text-xs font-bold px-1 rounded" style={{ background: 'rgba(250,204,21,0.2)', color: '#fde047' }}>{draws}D</span>}
-                                {losses > 0 && <span className="text-xs font-bold px-1 rounded" style={{ background: 'rgba(239,68,68,0.2)', color: '#f87171' }}>{losses}L</span>}
-                              </>
-                            )}
-                            <span className="text-gray-600 text-xs">{played}/{total}</span>
-                          </div>
+                          {nm && (
+                            <div className="mt-0.5 pl-6 text-[10px]" style={{ color: nm.live ? '#4ade80' : '#6b7280' }}>
+                              {nm.live ? (
+                                <span className="inline-flex items-center gap-1 font-bold">
+                                  <span className="relative flex h-1.5 w-1.5">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ background: '#4ade80' }}></span>
+                                    <span className="relative inline-flex rounded-full h-1.5 w-1.5" style={{ background: '#4ade80' }}></span>
+                                  </span>
+                                  Live · vs {nm.opp}
+                                </span>
+                              ) : (
+                                <span>vs {nm.opp} · {nm.time}</span>
+                              )}
+                            </div>
+                          )}
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 );
@@ -684,23 +769,23 @@ export default function App() {
 
           {/* Matches Section */}
           <div className="lg:col-span-3">
-            <div className="flex gap-4 mb-6">
+            <div className="inline-flex gap-1 mb-6 p-1 rounded-full" style={{ background: 'rgba(4, 13, 24, 0.85)', border: '1px solid rgba(255,255,255,0.06)' }}>
               <button
                 onClick={() => setView('matches')}
-                className="px-6 py-2 rounded font-bold transition"
+                className="px-6 py-2 rounded-full font-bold text-sm transition-all"
                 style={{
-                  background: view === 'matches' ? '#C8102E' : 'rgba(4, 13, 24, 0.85)',
-                  color: view === 'matches' ? '#040d18' : 'white'
+                  background: view === 'matches' ? '#C8102E' : 'transparent',
+                  color: view === 'matches' ? '#ffffff' : '#9ca3af'
                 }}
               >
                 Matches
               </button>
               <button
                 onClick={() => setView('stats')}
-                className="px-6 py-2 rounded font-bold transition"
+                className="px-6 py-2 rounded-full font-bold text-sm transition-all"
                 style={{
-                  background: view === 'stats' ? '#C8102E' : 'rgba(4, 13, 24, 0.85)',
-                  color: view === 'stats' ? '#040d18' : 'white'
+                  background: view === 'stats' ? '#C8102E' : 'transparent',
+                  color: view === 'stats' ? '#ffffff' : '#9ca3af'
                 }}
               >
                 Player Stats
@@ -713,12 +798,18 @@ export default function App() {
             <div className="space-y-8">
               {sortedDates.map(date => (
                 <div key={date}>
-                  <div className="text-lg font-bold text-white mb-4 pb-2" style={{ borderBottom: '2px solid rgba(200, 16, 46, 0.35)' }}>
-                    {new Date(date + 'T00:00:00').toLocaleDateString('en-US', { 
-                      weekday: 'long', 
-                      month: 'long', 
-                      day: 'numeric'
-                    })}
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="h-4 w-1 rounded-full" style={{ background: date === todayStr ? '#4ade80' : '#C8102E' }}></div>
+                    <div className="text-base font-bold text-white uppercase tracking-wide">
+                      {new Date(date + 'T00:00:00').toLocaleDateString('en-US', {
+                        weekday: 'long',
+                        month: 'long',
+                        day: 'numeric'
+                      })}
+                    </div>
+                    {date === todayStr && (
+                      <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full" style={{ background: 'rgba(74,222,128,0.15)', color: '#4ade80' }}>Today</span>
+                    )}
                   </div>
                   <div className="space-y-3">
                     {groupedMatches[date].map(match => {
@@ -727,9 +818,10 @@ export default function App() {
                       const live = md.status === 'IN_PLAY' || md.status === 'PAUSED';
                       const hasScore = md.home != null && md.away != null;
                       return (
-                        <div key={match.id} className="rounded-lg p-4" style={{
-                          background: 'rgba(4, 13, 24, 0.92)',
-                          border: live ? '1px solid rgba(74,222,128,0.4)' : '1px solid transparent'
+                        <div key={match.id} className="rounded-xl p-4 transition-all" style={{
+                          background: live ? 'rgba(74,222,128,0.06)' : 'rgba(4, 13, 24, 0.7)',
+                          border: live ? '1px solid rgba(74,222,128,0.4)' : '1px solid rgba(255,255,255,0.05)',
+                          boxShadow: live ? '0 0 20px rgba(74,222,128,0.1)' : 'none'
                         }}>
                           <div className="flex items-center justify-between mb-3">
                             <div className="text-sm text-gray-400">{match.time}</div>
