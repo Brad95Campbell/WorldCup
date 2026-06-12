@@ -27,6 +27,7 @@ const PLAYERS = [
   { id: 7, name: 'RJ', teams: ['Saudi Arabia', 'Egypt', 'Canada', 'Colombia', 'Spain'] },
   { id: 8, name: 'Tyler', teams: ['Panama', 'Ghana', 'Czechia', 'USA', 'Germany'] },
   { id: 9, name: 'Joe', teams: ['New Zealand', 'Scotland', 'Austria', 'Uruguay', 'Brazil'] },
+  { id: 10, name: 'Kev R', teams: ['Haiti', 'Iraq', 'Curaçao'] },
 ];
 
 const MATCHES = [
