@@ -573,7 +573,7 @@ export default function App() {
               <span className="relative inline-flex rounded-full h-2.5 w-2.5" style={{ background: '#4ade80' }}></span>
             </span>
           )}
-          {jumpOpen ? '✕ Close' : '☰ Jump to'}
+          {jumpOpen ? '✕ Close' : '☰ Menu'}
         </button>
       </div>
 
