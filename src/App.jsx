@@ -131,6 +131,7 @@ export default function App() {
   const [results, setResults] = useState({});
   const [loading, setLoading] = useState(true);
   const [locked, setLocked] = useState({});
+  const [meta, setMeta] = useState({}); // match_id -> { home, away, status }
 
   const [view, setView] = useState('matches');
 
@@ -147,13 +148,21 @@ export default function App() {
     let mounted = true;
 
     const loadResults = async () => {
-      const { data, error } = await supabase.from('results').select('match_id, winner, locked');
+      const { data, error } = await supabase
+        .from('results')
+        .select('match_id, winner, locked, home_score, away_score, status');
       if (!error && data && mounted) {
         const map = {};
         const lockMap = {};
-        data.forEach(row => { map[row.match_id] = row.winner; lockMap[row.match_id] = row.locked; });
+        const metaMap = {};
+        data.forEach(row => {
+          map[row.match_id] = row.winner;
+          lockMap[row.match_id] = row.locked;
+          metaMap[row.match_id] = { home: row.home_score, away: row.away_score, status: row.status };
+        });
         setResults(map);
         setLocked(lockMap);
+        setMeta(metaMap);
       }
       if (mounted) setLoading(false);
     };
@@ -178,6 +187,19 @@ export default function App() {
             delete next[payload.old.match_id];
           } else {
             next[payload.new.match_id] = payload.new.locked;
+          }
+          return next;
+        });
+        setMeta(prev => {
+          const next = { ...prev };
+          if (payload.eventType === 'DELETE') {
+            delete next[payload.old.match_id];
+          } else {
+            next[payload.new.match_id] = {
+              home: payload.new.home_score,
+              away: payload.new.away_score,
+              status: payload.new.status,
+            };
           }
           return next;
         });
@@ -319,6 +341,23 @@ export default function App() {
 
   const sortedDates = Object.keys(groupedMatches).sort();
 
+  // ----- Ticker: matches for "today" (or the next upcoming match day) -----
+  const todayStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD in local time
+  const isLiveStatus = (s) => s === 'IN_PLAY' || s === 'PAUSED';
+  const anyLiveNow = MATCHES.some(m => isLiveStatus(meta[m.id]?.status));
+
+  let tickerDate = todayStr;
+  let tickerMatches = groupedMatches[todayStr] || [];
+  if (tickerMatches.length === 0) {
+    // No matches today — show the next upcoming match day instead.
+    const futureDate = sortedDates.find(d => d >= todayStr);
+    if (futureDate) {
+      tickerDate = futureDate;
+      tickerMatches = groupedMatches[futureDate];
+    }
+  }
+  const tickerIsToday = tickerDate === todayStr;
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: 'linear-gradient(160deg, #040d18 0%, #081a32 50%, #0a0d18 100%)' }}>
@@ -406,6 +445,70 @@ export default function App() {
           </div>
         </div>
       </div>
+
+      {/* ===== Match Ticker ===== */}
+      {tickerMatches.length > 0 && (
+        <div style={{ background: 'rgba(4, 13, 24, 0.95)', borderBottom: '1px solid rgba(200,16,46,0.3)' }}>
+          <div className="max-w-7xl mx-auto px-4 py-3">
+            <div className="flex items-center gap-3">
+              <div className="shrink-0 flex items-center gap-2 pr-3" style={{ borderRight: '1px solid rgba(255,255,255,0.1)' }}>
+                {anyLiveNow ? (
+                  <span className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wide" style={{ color: '#4ade80' }}>
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ background: '#4ade80' }}></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2" style={{ background: '#4ade80' }}></span>
+                    </span>
+                    Live
+                  </span>
+                ) : (
+                  <span className="text-xs font-black uppercase tracking-wide" style={{ color: '#C8102E' }}>
+                    {tickerIsToday ? 'Today' : new Date(tickerDate + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                  </span>
+                )}
+              </div>
+              <div className="flex-1 overflow-x-auto">
+                <div className="flex items-center gap-3" style={{ width: 'max-content' }}>
+                  {tickerMatches.map(m => {
+                    const r = results[m.id];
+                    const md = meta[m.id] || {};
+                    const live = isLiveStatus(md.status);
+                    const finished = md.status === 'FINISHED' || !!r;
+                    const hasScore = md.home != null && md.away != null;
+                    return (
+                      <div
+                        key={m.id}
+                        className="shrink-0 flex items-center gap-2 px-3 py-1.5 rounded-lg"
+                        style={{
+                          background: live ? 'rgba(74,222,128,0.12)' : 'rgba(255,255,255,0.04)',
+                          border: live ? '1px solid rgba(74,222,128,0.4)' : '1px solid rgba(255,255,255,0.06)'
+                        }}
+                      >
+                        <span className="text-base leading-none">{COUNTRY_FLAGS[m.team1] || '🏳️'}</span>
+                        <span className="text-xs font-bold text-white whitespace-nowrap">{m.team1}</span>
+                        {hasScore ? (
+                          <span className="text-xs font-black px-1.5" style={{ color: live ? '#4ade80' : '#ffffff' }}>
+                            {md.home}–{md.away}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-gray-500 px-1">vs</span>
+                        )}
+                        <span className="text-xs font-bold text-white whitespace-nowrap">{m.team2}</span>
+                        <span className="text-base leading-none">{COUNTRY_FLAGS[m.team2] || '🏳️'}</span>
+                        <span className="text-[10px] font-bold uppercase ml-1 px-1.5 py-0.5 rounded whitespace-nowrap" style={{
+                          background: live ? '#4ade80' : finished ? 'rgba(200,16,46,0.8)' : 'rgba(255,255,255,0.1)',
+                          color: live ? '#040d18' : finished ? '#ffffff' : '#9ca3af'
+                        }}>
+                          {live ? (md.status === 'PAUSED' ? 'HT' : 'Live') : finished ? 'FT' : m.time.replace(' ET', '')}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="max-w-7xl mx-auto px-4 py-10">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
@@ -517,8 +620,14 @@ export default function App() {
                   <div className="space-y-3">
                     {groupedMatches[date].map(match => {
                       const result = results[match.id];
+                      const md = meta[match.id] || {};
+                      const live = md.status === 'IN_PLAY' || md.status === 'PAUSED';
+                      const hasScore = md.home != null && md.away != null;
                       return (
-                        <div key={match.id} className="rounded-lg p-4" style={{ background: 'rgba(4, 13, 24, 0.92)' }}>
+                        <div key={match.id} className="rounded-lg p-4" style={{
+                          background: 'rgba(4, 13, 24, 0.92)',
+                          border: live ? '1px solid rgba(74,222,128,0.4)' : '1px solid transparent'
+                        }}>
                           <div className="flex items-center justify-between mb-3">
                             <div className="text-sm text-gray-400">{match.time}</div>
                             <div className="flex items-center gap-2">
@@ -527,7 +636,15 @@ export default function App() {
                                   ✎ Manual
                                 </div>
                               )}
-                              {result ? (
+                              {live ? (
+                                <div className="flex items-center gap-1.5 text-xs font-bold px-2 py-1 rounded" style={{ background: '#4ade80', color: '#040d18' }}>
+                                  <span className="relative flex h-1.5 w-1.5">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ background: '#040d18' }}></span>
+                                    <span className="relative inline-flex rounded-full h-1.5 w-1.5" style={{ background: '#040d18' }}></span>
+                                  </span>
+                                  {md.status === 'PAUSED' ? 'Half-time' : 'Live'}
+                                </div>
+                              ) : result ? (
                                 <div className="text-xs font-bold px-2 py-1 rounded" style={{ background: '#C8102E', color: '#ffffff' }}>
                                   Final
                                 </div>
@@ -556,9 +673,15 @@ export default function App() {
                               )}
                             </div>
 
-                            {/* Center column: vs / Draw */}
-                            <div className="flex flex-col items-center gap-2 px-2">
-                              <div className="text-gray-500 font-bold text-sm">vs</div>
+                            {/* Center column: score / vs / Draw */}
+                            <div className="flex flex-col items-center gap-2 px-3">
+                              {hasScore ? (
+                                <div className="text-2xl font-black" style={{ color: live ? '#4ade80' : '#ffffff' }}>
+                                  {md.home}<span className="text-gray-500 mx-1">–</span>{md.away}
+                                </div>
+                              ) : (
+                                <div className="text-gray-500 font-bold text-sm">vs</div>
+                              )}
                               {result === 'draw' && (
                                 <div className="px-2 py-1 rounded font-bold text-xs" style={{ background: '#fde047', color: '#040d18' }}>
                                   Draw
