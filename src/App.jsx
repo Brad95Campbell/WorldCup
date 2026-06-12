@@ -690,7 +690,7 @@ export default function App() {
                 </span>
               )}
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
               {tickerMatches.map(m => {
                 const r = results[m.id];
                 const md = meta[m.id] || {};
@@ -706,32 +706,32 @@ export default function App() {
                       border: live ? '1px solid rgba(74,222,128,0.4)' : '1px solid rgba(255,255,255,0.06)'
                     }}
                   >
-                    <div className="flex flex-col items-center min-w-0">
-                      <div className="flex items-center gap-1">
-                        <span className="text-base leading-none">{COUNTRY_FLAGS[m.team1] || '🏳️'}</span>
-                        <span className="text-xs font-bold text-white whitespace-nowrap">{m.team1}</span>
+                    <div className="flex flex-col items-center min-w-0 flex-1">
+                      <div className="flex items-center gap-1 min-w-0">
+                        <span className="text-base leading-none shrink-0">{COUNTRY_FLAGS[m.team1] || '🏳️'}</span>
+                        <span className="text-xs font-bold text-white truncate">{m.team1}</span>
                       </div>
                       {getPlayersForTeam(m.team1).length > 0 && (
-                        <span className="text-[9px] whitespace-nowrap" style={{ color: '#C8102E' }}>{getPlayersForTeam(m.team1).map(p => p.name).join(', ')}</span>
+                        <span className="text-[9px] truncate max-w-full" style={{ color: '#C8102E' }}>{getPlayersForTeam(m.team1).map(p => p.name).join(', ')}</span>
                       )}
                     </div>
                     {hasScore ? (
-                      <span className="text-sm font-black px-1.5 shrink-0" style={{ color: live ? '#4ade80' : '#ffffff' }}>
+                      <span className="text-sm font-black px-1 shrink-0" style={{ color: live ? '#4ade80' : '#ffffff' }}>
                         {md.home}–{md.away}
                       </span>
                     ) : (
                       <span className="text-xs text-gray-500 px-1 shrink-0">vs</span>
                     )}
-                    <div className="flex flex-col items-center min-w-0">
-                      <div className="flex items-center gap-1">
-                        <span className="text-base leading-none">{COUNTRY_FLAGS[m.team2] || '🏳️'}</span>
-                        <span className="text-xs font-bold text-white whitespace-nowrap">{m.team2}</span>
+                    <div className="flex flex-col items-center min-w-0 flex-1">
+                      <div className="flex items-center gap-1 min-w-0">
+                        <span className="text-base leading-none shrink-0">{COUNTRY_FLAGS[m.team2] || '🏳️'}</span>
+                        <span className="text-xs font-bold text-white truncate">{m.team2}</span>
                       </div>
                       {getPlayersForTeam(m.team2).length > 0 && (
-                        <span className="text-[9px] whitespace-nowrap" style={{ color: '#C8102E' }}>{getPlayersForTeam(m.team2).map(p => p.name).join(', ')}</span>
+                        <span className="text-[9px] truncate max-w-full" style={{ color: '#C8102E' }}>{getPlayersForTeam(m.team2).map(p => p.name).join(', ')}</span>
                       )}
                     </div>
-                    <span className="text-[10px] font-bold uppercase ml-1 px-1.5 py-0.5 rounded whitespace-nowrap shrink-0" style={{
+                    <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded whitespace-nowrap shrink-0" style={{
                       background: live ? '#4ade80' : finished ? 'rgba(200,16,46,0.8)' : 'rgba(255,255,255,0.1)',
                       color: live ? '#040d18' : finished ? '#ffffff' : '#9ca3af'
                     }}>
