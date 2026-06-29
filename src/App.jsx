@@ -1135,7 +1135,7 @@ export default function App() {
                     )}
                   </div>
                   <div className="space-y-3">
-                    {groupedMatches[date].filter(matchFilter).map(match => {
+                    {groupedMatches[date].filter(matchFilter).slice().sort((a, b) => matchKickoff(a) - matchKickoff(b)).map(match => {
                       const result = results[match.id];
                       const md = meta[match.id] || {};
                       const live = md.status === 'IN_PLAY' || md.status === 'PAUSED';
