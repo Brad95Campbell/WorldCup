@@ -103,7 +103,57 @@ const MATCHES = [
   { id: 70, date: '2026-06-27', time: '7:30 PM ET', team1: 'DR Congo', team2: 'Uzbekistan' },
   { id: 71, date: '2026-06-27', time: '10:00 PM ET', team1: 'Jordan', team2: 'Argentina' },
   { id: 72, date: '2026-06-27', time: '10:00 PM ET', team1: 'Algeria', team2: 'Austria' },
+  // ===== Knockout stage — Round of 32 (FIFA match numbers 73–88) =====
+  { id: 73, date: '2026-06-28', time: '3:00 PM ET',  team1: 'South Africa', team2: 'Canada', round: 'R32' },
+  { id: 74, date: '2026-06-29', time: '4:30 PM ET',  team1: 'Germany', team2: 'Paraguay', round: 'R32' },
+  { id: 75, date: '2026-06-29', time: '9:00 PM ET',  team1: 'Netherlands', team2: 'Morocco', round: 'R32' },
+  { id: 76, date: '2026-06-29', time: '1:00 PM ET',  team1: 'Brazil', team2: 'Japan', round: 'R32' },
+  { id: 77, date: '2026-06-30', time: '5:00 PM ET',  team1: 'France', team2: 'Sweden', round: 'R32' },
+  { id: 78, date: '2026-06-30', time: '1:00 PM ET',  team1: "Côte d'Ivoire", team2: 'Norway', round: 'R32' },
+  { id: 79, date: '2026-06-30', time: '9:00 PM ET',  team1: 'Mexico', team2: 'Ecuador', round: 'R32' },
+  { id: 80, date: '2026-07-01', time: '12:00 PM ET', team1: 'England', team2: 'DR Congo', round: 'R32' },
+  { id: 81, date: '2026-07-01', time: '8:00 PM ET',  team1: 'USA', team2: 'Bosnia and Herzegovina', round: 'R32' },
+  { id: 82, date: '2026-07-01', time: '4:00 PM ET',  team1: 'Belgium', team2: 'Senegal', round: 'R32' },
+  { id: 83, date: '2026-07-02', time: '7:00 PM ET',  team1: 'Portugal', team2: 'Croatia', round: 'R32' },
+  { id: 84, date: '2026-07-02', time: '3:00 PM ET',  team1: 'Spain', team2: 'Austria', round: 'R32' },
+  { id: 85, date: '2026-07-02', time: '11:00 PM ET', team1: 'Switzerland', team2: 'Algeria', round: 'R32' },
+  { id: 86, date: '2026-07-03', time: '6:00 PM ET',  team1: 'Argentina', team2: 'Cabo Verde', round: 'R32' },
+  { id: 87, date: '2026-07-03', time: '9:30 PM ET',  team1: 'Colombia', team2: 'Ghana', round: 'R32' },
+  { id: 88, date: '2026-07-03', time: '2:00 PM ET',  team1: 'Australia', team2: 'Egypt', round: 'R32' },
+  // ===== Round of 16 — teams auto-fill from the R32 winners that feed in =====
+  { id: 89, date: '2026-07-04', time: '5:00 PM ET',  round: 'R16', feed1: { from: 74 }, feed2: { from: 77 } },
+  { id: 90, date: '2026-07-04', time: '1:00 PM ET',  round: 'R16', feed1: { from: 73 }, feed2: { from: 75 } },
+  { id: 91, date: '2026-07-05', time: '8:00 PM ET',  round: 'R16', feed1: { from: 76 }, feed2: { from: 78 } },
+  { id: 92, date: '2026-07-05', time: '4:00 PM ET',  round: 'R16', feed1: { from: 79 }, feed2: { from: 80 } },
+  { id: 93, date: '2026-07-06', time: '8:00 PM ET',  round: 'R16', feed1: { from: 83 }, feed2: { from: 84 } },
+  { id: 94, date: '2026-07-06', time: '3:00 PM ET',  round: 'R16', feed1: { from: 81 }, feed2: { from: 82 } },
+  { id: 95, date: '2026-07-07', time: '4:00 PM ET',  round: 'R16', feed1: { from: 86 }, feed2: { from: 88 } },
+  { id: 96, date: '2026-07-07', time: '12:00 PM ET', round: 'R16', feed1: { from: 85 }, feed2: { from: 87 } },
+  // ===== Quarter-finals =====
+  { id: 97,  date: '2026-07-09', time: '4:00 PM ET', round: 'QF', feed1: { from: 89 }, feed2: { from: 90 } },
+  { id: 98,  date: '2026-07-10', time: '3:00 PM ET', round: 'QF', feed1: { from: 93 }, feed2: { from: 94 } },
+  { id: 99,  date: '2026-07-11', time: '5:00 PM ET', round: 'QF', feed1: { from: 91 }, feed2: { from: 92 } },
+  { id: 100, date: '2026-07-11', time: '9:00 PM ET', round: 'QF', feed1: { from: 95 }, feed2: { from: 96 } },
+  // ===== Semi-finals =====
+  { id: 101, date: '2026-07-14', time: '3:00 PM ET', round: 'SF', feed1: { from: 97 }, feed2: { from: 98 } },
+  { id: 102, date: '2026-07-15', time: '3:00 PM ET', round: 'SF', feed1: { from: 99 }, feed2: { from: 100 } },
+  // ===== Third-place play-off (losers of the semis) & Final =====
+  { id: 103, date: '2026-07-18', time: '5:00 PM ET', round: 'ThirdPlace', feed1: { from: 101, lose: true }, feed2: { from: 102, lose: true } },
+  { id: 104, date: '2026-07-19', time: '3:00 PM ET', round: 'Final', feed1: { from: 101 }, feed2: { from: 102 } },
 ];
+
+// Knockout round labels and the points a WIN in that round is worth.
+// Group-stage wins are worth 1 (draws 0.5); each knockout round adds one more.
+const ROUND_INFO = {
+  R32:        { label: 'Round of 32',   points: 2 },
+  R16:        { label: 'Round of 16',   points: 3 },
+  QF:         { label: 'Quarter-final', points: 4 },
+  SF:         { label: 'Semi-final',    points: 5 },
+  ThirdPlace: { label: 'Third place',   points: 5 },
+  Final:      { label: 'Final',         points: 6 },
+};
+// Points a win is worth for a given match (group stage default = 1).
+const winPoints = (match) => (match.round ? (ROUND_INFO[match.round]?.points ?? 1) : 1);
 
 const MATCH_ODDS = {
   2: { h: 200, t: 105, a: 310 },
@@ -443,6 +493,7 @@ export default function App() {
     return PLAYERS.map(player => {
       let points = 0;
       let remaining = 0;     // matches still to be played that involve their teams
+      let maxBonus = 0;      // best-case points still available from remaining games
       MATCHES.forEach(match => {
         const ownsTeam1 = player.teams.includes(match.team1);
         const ownsTeam2 = player.teams.includes(match.team2);
@@ -450,23 +501,26 @@ export default function App() {
 
         const result = results[match.id];
         const done = !!result || meta[match.id]?.status === 'FINISHED';
+        const wp = winPoints(match); // 1 for group, 2/3/4/5/6 for knockout rounds
+        const isKO = !!match.round;
 
         if (done && result) {
-          // Award actual points: 1 if their team won; 0.5 per owned team in a draw.
           if (result === 'draw') {
-            points += (ownsTeam1 ? 0.5 : 0) + (ownsTeam2 ? 0.5 : 0);
+            // Knockout matches don't end in a draw for advancement, so a draw
+            // only scores in the group stage (0.5 per owned team).
+            if (!isKO) points += (ownsTeam1 ? 0.5 : 0) + (ownsTeam2 ? 0.5 : 0);
           } else if (player.teams.includes(result)) {
-            points += 1;
+            points += wp;
           }
         } else {
-          // Not finished — still winnable. Even when a player owns BOTH teams in
-          // a match, only 1 point is possible from it (a win = 1; a draw =
-          // 0.5 + 0.5 = 1), so each remaining match adds exactly 1 to the ceiling.
           remaining += 1;
+          // Best case from this match: a win = its round's value. Even owning
+          // both teams, only one can win, so the ceiling is that round's points.
+          maxBonus += wp;
         }
       });
-      // Maximum they could still finish on: current points + 1 per game left.
-      const maxPoints = points + remaining;
+      // Maximum they could still finish on, given currently-scheduled matches.
+      const maxPoints = points + maxBonus;
       const oddsSum = player.teams.reduce((sum, team) => sum + (ODDS[team] ?? 999999), 0);
       return { ...player, points, oddsSum, remaining, maxPoints };
     }).sort((a, b) => {
@@ -992,7 +1046,14 @@ export default function App() {
                           boxShadow: live ? '0 0 20px rgba(74,222,128,0.1)' : 'none'
                         }}>
                           <div className="flex items-center justify-between mb-3">
-                            <div className="text-sm text-gray-400">{match.time}</div>
+                            <div className="flex items-center gap-2">
+                              <div className="text-sm text-gray-400">{match.time}</div>
+                              {match.round && (
+                                <div className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full" style={{ background: 'rgba(168,85,247,0.18)', color: '#c4b5fd', border: '1px solid rgba(168,85,247,0.35)' }}>
+                                  {ROUND_INFO[match.round]?.label} · {ROUND_INFO[match.round]?.points} pts
+                                </div>
+                              )}
+                            </div>
                             <div className="flex items-center gap-2">
                               {result && locked[match.id] && (
                                 <div className="text-xs font-bold px-2 py-1 rounded" style={{ background: 'rgba(250,204,21,0.2)', color: '#fde047' }}>
@@ -1073,7 +1134,7 @@ export default function App() {
                             <div className="text-center text-sm text-gray-400">
                               {result === 'draw'
                                 ? `Draw · +0.5 each`
-                                : `${COUNTRY_FLAGS[result]} ${result} wins · +1 pt`
+                                : `${COUNTRY_FLAGS[result]} ${result} wins · +${winPoints(match)} pt${winPoints(match) > 1 ? 's' : ''}`
                               }
                             </div>
                           )}
