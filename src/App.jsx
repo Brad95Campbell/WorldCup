@@ -155,6 +155,73 @@ const ROUND_INFO = {
 // Points a win is worth for a given match (group stage default = 1).
 const winPoints = (match) => (match.round ? (ROUND_INFO[match.round]?.points ?? 1) : 1);
 
+// Static lookup of every match by id (structure only — teams may be TBD).
+const MATCH_BY_ID = {};
+MATCHES.forEach((m) => { MATCH_BY_ID[m.id] = m; });
+
+// Resolve the knockout bracket: fill each match's teams from the winners (or
+// losers, for the third-place game) of the matches that feed into it. Matches
+// whose feeders aren't decided yet resolve to 'TBD'. Because MATCHES is in
+// ascending id order and feeders always have lower ids, a single pass works.
+function resolveBracket(results) {
+  const byId = {};
+  const out = MATCHES.map((m) => {
+    const resolveFeed = (feed) => {
+      if (!feed) return null;
+      const w = results[feed.from];
+      if (!w || w === 'draw') return null;        // feeder not decided yet
+      if (feed.lose) {                            // third-place game wants the loser
+        const src = byId[feed.from];
+        if (!src || src.team1 === 'TBD' || src.team2 === 'TBD') return null;
+        return src.team1 === w ? src.team2 : src.team1;
+      }
+      return w;                                   // normal feed wants the winner
+    };
+    const t1 = m.feed1 ? resolveFeed(m.feed1) : (m.team1 ?? null);
+    const t2 = m.feed2 ? resolveFeed(m.feed2) : (m.team2 ?? null);
+    const rm = { ...m, team1: t1 || 'TBD', team2: t2 || 'TBD' };
+    byId[m.id] = rm;
+    return rm;
+  });
+  return out;
+}
+
+// Best-case future knockout points for a player, projected over the bracket
+// tree feeding a given match. Returns { futurePts, ownedAlive }:
+//  - futurePts: most additional points still winnable from pending matches in
+//    this subtree, assuming the player's teams win every game they can.
+//  - ownedAlive: whether an owned team can emerge as this match's winner.
+// Crucially this counts each match at most once, so two of a player's teams in
+// the same subtree collide at their shared match and only one proceeds — you
+// get that match's points once, not twice.
+function koProjection(matchId, ownsTeam, results, memo) {
+  if (memo[matchId]) return memo[matchId];
+  const m = MATCH_BY_ID[matchId];
+  let res;
+  if (!m.feed1) {
+    // Round-of-32 entry: two fixed teams.
+    const result = results[matchId];
+    if (result && result !== 'draw') {
+      res = { futurePts: 0, ownedAlive: ownsTeam(result) };
+    } else {
+      const ownedHere = ownsTeam(m.team1) || ownsTeam(m.team2);
+      res = { futurePts: ownedHere ? winPoints(m) : 0, ownedAlive: ownedHere };
+    }
+  } else {
+    const ra = koProjection(m.feed1.from, ownsTeam, results, memo);
+    const rb = koProjection(m.feed2.from, ownsTeam, results, memo);
+    const result = results[matchId];
+    if (result && result !== 'draw') {
+      res = { futurePts: ra.futurePts + rb.futurePts, ownedAlive: ownsTeam(result) };
+    } else {
+      const canWin = ra.ownedAlive || rb.ownedAlive;
+      res = { futurePts: ra.futurePts + rb.futurePts + (canWin ? winPoints(m) : 0), ownedAlive: canWin };
+    }
+  }
+  memo[matchId] = res;
+  return res;
+}
+
 const MATCH_ODDS = {
   2: { h: 200, t: 105, a: 310 },
   3: { h: -120, t: 240, a: 360 },
@@ -400,6 +467,27 @@ export default function App() {
   const isLiveStatus = (s) => s === 'IN_PLAY' || s === 'PAUSED';
   const todayStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD local
 
+  // Bracket with knockout teams filled in from results (auto-fills each round
+  // as the prior round is decided). Everything below reads team names off these.
+  const resolvedMatches = resolveBracket(results);
+
+  // Which teams are out: lost a completed knockout game, or (once the group
+  // stage is over) didn't make the Round of 32.
+  const r32Teams = new Set();
+  MATCHES.forEach(m => { if (m.round === 'R32') { r32Teams.add(m.team1); r32Teams.add(m.team2); } });
+  const groupComplete = MATCHES.filter(m => !m.round).every(m => !!results[m.id] || meta[m.id]?.status === 'FINISHED');
+  const eliminatedTeams = new Set();
+  resolvedMatches.forEach(m => {
+    if (!m.round) return;
+    const result = results[m.id];
+    if (!result || result === 'draw') return;
+    const loser = m.team1 === result ? m.team2 : m.team1;
+    if (loser && loser !== 'TBD') eliminatedTeams.add(loser);
+  });
+  if (groupComplete) {
+    PLAYERS.forEach(p => p.teams.forEach(t => { if (!r32Teams.has(t)) eliminatedTeams.add(t); }));
+  }
+
   // Podium colors for the top three (gold / silver / bronze), null otherwise.
   const medal = (index) => {
     if (index === 0) return { solid: '#fbbf24', tint: 'rgba(251,191,36,0.15)', border: 'rgba(251,191,36,0.4)', glow: 'rgba(251,191,36,0.08)', text: '#040d18', emoji: '🥇' };
@@ -430,7 +518,7 @@ export default function App() {
   // For a team: the match that's live now, else the soonest match without a
   // recorded result, else null (all done). Returns { match, live }.
   const nextMatchForTeam = (team) => {
-    const teamMatches = MATCHES
+    const teamMatches = resolvedMatches
       .filter(m => m.team1 === team || m.team2 === team)
       .sort((a, b) => matchKickoff(a) - matchKickoff(b));
     const liveOne = teamMatches.find(m => isLiveStatus(meta[m.id]?.status));
@@ -460,7 +548,7 @@ export default function App() {
       };
 
       player.teams.forEach(team => {
-        MATCHES.forEach(match => {
+        resolvedMatches.forEach(match => {
           if (match.team1 === team || match.team2 === team) {
             const result = results[match.id];
             let outcome = 'pending';
@@ -491,36 +579,45 @@ export default function App() {
 
   const calculatePoints = () => {
     return PLAYERS.map(player => {
+      const ownsTeam = (t) => player.teams.includes(t);
       let points = 0;
-      let remaining = 0;     // matches still to be played that involve their teams
-      let maxBonus = 0;      // best-case points still available from remaining games
-      MATCHES.forEach(match => {
-        const ownsTeam1 = player.teams.includes(match.team1);
-        const ownsTeam2 = player.teams.includes(match.team2);
+      let remaining = 0;     // currently-scheduled matches still to play for their teams
+      resolvedMatches.forEach(match => {
+        const ownsTeam1 = ownsTeam(match.team1);
+        const ownsTeam2 = ownsTeam(match.team2);
         if (!ownsTeam1 && !ownsTeam2) return;
 
         const result = results[match.id];
         const done = !!result || meta[match.id]?.status === 'FINISHED';
-        const wp = winPoints(match); // 1 for group, 2/3/4/5/6 for knockout rounds
         const isKO = !!match.round;
 
         if (done && result) {
           if (result === 'draw') {
-            // Knockout matches don't end in a draw for advancement, so a draw
-            // only scores in the group stage (0.5 per owned team).
+            // Knockouts don't end drawn for advancement; a draw only scores in groups.
             if (!isKO) points += (ownsTeam1 ? 0.5 : 0) + (ownsTeam2 ? 0.5 : 0);
           } else if (player.teams.includes(result)) {
-            points += wp;
+            points += winPoints(match);
           }
         } else {
           remaining += 1;
-          // Best case from this match: a win = its round's value. Even owning
-          // both teams, only one can win, so the ceiling is that round's points.
-          maxBonus += wp;
         }
       });
-      // Maximum they could still finish on, given currently-scheduled matches.
-      const maxPoints = points + maxBonus;
+
+      // ----- Max possible points -----
+      // Current points, plus the best case from every game still ahead:
+      //  • group stage: +1 for each unplayed group game involving their teams
+      //  • knockouts: the full championship path (R32→Final), projected over the
+      //    bracket so two of their teams meeting only yields that match once.
+      let futureGroupBonus = 0;
+      MATCHES.forEach(m => {
+        if (m.round) return; // knockouts handled by the projection below
+        const done = !!results[m.id] || meta[m.id]?.status === 'FINISHED';
+        if (done) return;
+        if (ownsTeam(m.team1) || ownsTeam(m.team2)) futureGroupBonus += winPoints(m);
+      });
+      const koBonus = koProjection(104, ownsTeam, results, {}).futurePts;
+      const maxPoints = points + futureGroupBonus + koBonus;
+
       const oddsSum = player.teams.reduce((sum, team) => sum + (ODDS[team] ?? 999999), 0);
       return { ...player, points, oddsSum, remaining, maxPoints };
     }).sort((a, b) => {
@@ -533,7 +630,7 @@ export default function App() {
   const leaderboard = calculatePoints();
   const groupedMatches = {};
   
-  MATCHES.forEach(match => {
+  resolvedMatches.forEach(match => {
     if (!groupedMatches[match.date]) {
       groupedMatches[match.date] = [];
     }
@@ -558,7 +655,7 @@ export default function App() {
   const todayCount = (groupedMatches[todayStr] || []).length;
 
   // ----- Ticker: matches for "today" (or the next upcoming match day) -----
-  const anyLiveNow = MATCHES.some(m => isLiveStatus(meta[m.id]?.status));
+  const anyLiveNow = resolvedMatches.some(m => isLiveStatus(meta[m.id]?.status));
 
   let tickerDate = todayStr;
   let tickerMatches = groupedMatches[todayStr] || [];
@@ -574,7 +671,7 @@ export default function App() {
 
   // Make sure any live match appears in the ticker even if its calendar date
   // differs (e.g. a midnight kickoff), then sort so LIVE matches come first.
-  const liveMatches = MATCHES.filter(m => isLiveStatus(meta[m.id]?.status));
+  const liveMatches = resolvedMatches.filter(m => isLiveStatus(meta[m.id]?.status));
   const tickerIds = new Set(tickerMatches.map(m => m.id));
   const extraLive = liveMatches.filter(m => !tickerIds.has(m.id));
   tickerMatches = [...extraLive, ...tickerMatches].sort((a, b) => {
@@ -845,7 +942,7 @@ export default function App() {
             <div className="space-y-2.5">
               {leaderboard.map((player, index) => {
                 const teamRecords = player.teams.map(team => {
-                  const teamMatches = MATCHES.filter(m => m.team1 === team || m.team2 === team);
+                  const teamMatches = resolvedMatches.filter(m => m.team1 === team || m.team2 === team);
                   const wins = teamMatches.filter(m => results[m.id] === team).length;
                   const draws = teamMatches.filter(m => results[m.id] === 'draw').length;
                   const losses = teamMatches.filter(m => results[m.id] && results[m.id] !== team && results[m.id] !== 'draw').length;
@@ -923,15 +1020,19 @@ export default function App() {
                     <div className="space-y-1">
                       {teamRecords.map(({ team, wins, draws, losses, played, total }) => {
                         const nm = nextMatchLabel(team);
+                        const out = eliminatedTeams.has(team);
                         return (
-                        <div key={team} className="py-1.5 px-2 rounded-md" style={{ background: 'rgba(255,255,255,0.03)' }}>
+                        <div key={team} className="py-1.5 px-2 rounded-md" style={{ background: out ? 'rgba(239,68,68,0.06)' : 'rgba(255,255,255,0.03)', opacity: out ? 0.6 : 1 }}>
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-1.5 min-w-0">
-                              <span className="text-base leading-none">{COUNTRY_FLAGS[team] || '🏳️'}</span>
-                              <span className="text-gray-200 text-xs truncate">{team}</span>
+                              <span className="text-base leading-none" style={{ filter: out ? 'grayscale(1)' : 'none' }}>{COUNTRY_FLAGS[team] || '🏳️'}</span>
+                              <span className="text-xs truncate" style={{ color: out ? '#6b7280' : '#e5e7eb', textDecoration: out ? 'line-through' : 'none' }}>{team}</span>
+                              {out && (
+                                <span className="text-[9px] font-black uppercase px-1 rounded shrink-0" style={{ background: 'rgba(239,68,68,0.2)', color: '#f87171' }}>Out</span>
+                              )}
                             </div>
                             <div className="flex items-center gap-1 ml-2 shrink-0">
-                              {ODDS[team] && (
+                              {ODDS[team] && !out && (
                                 <span className="text-[10px] font-bold px-1 rounded" style={{ background: 'rgba(250, 204, 21, 0.12)', color: '#fde047' }}>
                                   {formatOdds(ODDS[team])}
                                 </span>
@@ -947,7 +1048,7 @@ export default function App() {
                               )}
                             </div>
                           </div>
-                          {nm && (
+                          {nm && !out && (
                             <div className="mt-0.5 pl-6 text-[10px]" style={{ color: nm.live ? '#4ade80' : '#6b7280' }}>
                               {nm.live ? (
                                 <span className="inline-flex items-center gap-1 font-bold">
