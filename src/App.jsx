@@ -476,17 +476,28 @@ export default function App() {
   const r32Teams = new Set();
   MATCHES.forEach(m => { if (m.round === 'R32') { r32Teams.add(m.team1); r32Teams.add(m.team2); } });
   const groupComplete = MATCHES.filter(m => !m.round).every(m => !!results[m.id] || meta[m.id]?.status === 'FINISHED');
-  const eliminatedTeams = new Set();
+  // team name -> how they went out: { label } e.g. "Eliminated in the Round of 32"
+  const eliminationInfo = {};
   resolvedMatches.forEach(m => {
     if (!m.round) return;
     const result = results[m.id];
     if (!result || result === 'draw') return;
     const loser = m.team1 === result ? m.team2 : m.team1;
-    if (loser && loser !== 'TBD') eliminatedTeams.add(loser);
+    if (loser && loser !== 'TBD') {
+      const label = m.round === 'ThirdPlace'
+        ? 'Finished 4th'
+        : `Eliminated in the ${ROUND_INFO[m.round]?.label ?? m.round}`;
+      eliminationInfo[loser] = { label };
+    }
   });
   if (groupComplete) {
-    PLAYERS.forEach(p => p.teams.forEach(t => { if (!r32Teams.has(t)) eliminatedTeams.add(t); }));
+    PLAYERS.forEach(p => p.teams.forEach(t => {
+      if (!r32Teams.has(t) && !eliminationInfo[t]) {
+        eliminationInfo[t] = { label: 'Did not qualify for knockouts' };
+      }
+    }));
   }
+  const isEliminated = (team) => !!eliminationInfo[team];
 
   // Podium colors for the top three (gold / silver / bronze), null otherwise.
   const medal = (index) => {
@@ -947,8 +958,14 @@ export default function App() {
                   const draws = teamMatches.filter(m => results[m.id] === 'draw').length;
                   const losses = teamMatches.filter(m => results[m.id] && results[m.id] !== team && results[m.id] !== 'draw').length;
                   const played = wins + draws + losses;
-                  return { team, wins, draws, losses, played, total: teamMatches.length };
-                }).sort((a, b) => (ODDS[a.team] ?? Infinity) - (ODDS[b.team] ?? Infinity));
+                  const elim = eliminationInfo[team] || null;
+                  return { team, wins, draws, losses, played, total: teamMatches.length, elim };
+                }).sort((a, b) => {
+                  // Still-alive teams first, then eliminated; within each group,
+                  // best title odds (lowest number) first.
+                  if (!!a.elim !== !!b.elim) return a.elim ? 1 : -1;
+                  return (ODDS[a.team] ?? Infinity) - (ODDS[b.team] ?? Infinity);
+                });
 
                 return (
                   <div
@@ -1018,18 +1035,25 @@ export default function App() {
 
                     {/* Team breakdown */}
                     <div className="space-y-1">
-                      {teamRecords.map(({ team, wins, draws, losses, played, total }) => {
+                      {teamRecords.map(({ team, wins, draws, losses, played, total, elim }, ti) => {
                         const nm = nextMatchLabel(team);
-                        const out = eliminatedTeams.has(team);
+                        const out = !!elim;
+                        // Show a divider label the first time we hit an eliminated team.
+                        const showDivider = out && (ti === 0 || !teamRecords[ti - 1].elim);
                         return (
-                        <div key={team} className="py-1.5 px-2 rounded-md" style={{ background: out ? 'rgba(239,68,68,0.06)' : 'rgba(255,255,255,0.03)', opacity: out ? 0.6 : 1 }}>
+                        <div key={team}>
+                          {showDivider && (
+                            <div className="flex items-center gap-2 pt-1.5 pb-0.5">
+                              <div className="h-px flex-1" style={{ background: 'rgba(255,255,255,0.08)' }}></div>
+                              <span className="text-[8px] uppercase tracking-widest font-black text-gray-600">Eliminated</span>
+                              <div className="h-px flex-1" style={{ background: 'rgba(255,255,255,0.08)' }}></div>
+                            </div>
+                          )}
+                          <div className="py-1.5 px-2 rounded-md" style={{ background: out ? 'rgba(239,68,68,0.06)' : 'rgba(255,255,255,0.03)', opacity: out ? 0.7 : 1 }}>
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-1.5 min-w-0">
                               <span className="text-base leading-none" style={{ filter: out ? 'grayscale(1)' : 'none' }}>{COUNTRY_FLAGS[team] || '🏳️'}</span>
                               <span className="text-xs truncate" style={{ color: out ? '#6b7280' : '#e5e7eb', textDecoration: out ? 'line-through' : 'none' }}>{team}</span>
-                              {out && (
-                                <span className="text-[9px] font-black uppercase px-1 rounded shrink-0" style={{ background: 'rgba(239,68,68,0.2)', color: '#f87171' }}>Out</span>
-                              )}
                             </div>
                             <div className="flex items-center gap-1 ml-2 shrink-0">
                               {ODDS[team] && !out && (
@@ -1048,7 +1072,9 @@ export default function App() {
                               )}
                             </div>
                           </div>
-                          {nm && !out && (
+                          {out ? (
+                            <div className="mt-0.5 pl-6 text-[10px] italic" style={{ color: '#9ca3af' }}>{elim.label}</div>
+                          ) : nm && (
                             <div className="mt-0.5 pl-6 text-[10px]" style={{ color: nm.live ? '#4ade80' : '#6b7280' }}>
                               {nm.live ? (
                                 <span className="inline-flex items-center gap-1 font-bold">
@@ -1063,6 +1089,7 @@ export default function App() {
                               )}
                             </div>
                           )}
+                          </div>
                         </div>
                         );
                       })}
